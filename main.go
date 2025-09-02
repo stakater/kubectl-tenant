@@ -84,7 +84,7 @@ This behaves like 'kubectl get storageclasses', but filtered to those listed in
 
 	printFlags.AddFlags(cmd)
 	// mimic kubectl defaults (human-readable table if no -o provided)
-	_ = printFlags.EnsureWithNamespace()
+	// _ = printFlags.EnsureWithNamespace()
 	return cmd
 }
 
