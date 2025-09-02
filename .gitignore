@@ -1,0 +1,49 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Output of build process
+/bin/
+
+# Go workspace file
+/go.work
+/go.work.sum
+
+# Dependency directories (remove the comment below if you use vendoring)
+# /vendor/
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# GoReleaser dist output
+/dist/
+
+# Coverage files
+*.coverprofile
+coverage.out
+
+# Temporary files
+*.tmp
+*.bak
+
+# Test cache
+__pycache__/
+
+# Environment files
+.env
+.env.*

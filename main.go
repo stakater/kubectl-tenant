@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"os"
 	"sort"
 	"strings"
+
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 
 	"github.com/spf13/cobra"
 	storagev1 "k8s.io/api/storage/v1"
@@ -23,7 +24,7 @@ import (
 )
 
 const (
-	pluginName = "kubectl-tenant"
+	PluginName = "kubectl-tenant"
 )
 
 func main() {
