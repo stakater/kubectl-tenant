@@ -1,4 +1,7 @@
 project_name: kubectl-tenant
+before:
+  hooks:
+    - go mod download
 builds:
   - main: ./main.go
     binary: kubectl-tenant
@@ -7,12 +10,16 @@ builds:
       - darwin
       - windows
     goarch:
+      - 386
       - amd64
+      - arm
       - arm64
+    env:
+      - CGO_ENABLED=0
 archives:
-  - format: tar.gz
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files:
-      - kubectl-tenant
-      - README.md
-      - LICENSE
+  - formats: ["tar.gz"]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+snapshot:
+  version_template: "{{ .Tag }}-next"
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
