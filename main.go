@@ -57,7 +57,8 @@ func newRootCmd() *cobra.Command {
 	return root
 }
 
-func newListStorageClassesCmd(configFlags *genericclioptions.ConfigFlags, ioStreams genericiooptions.IOStreams) *cobra.Command {
+func newListStorageClassesCmd(configFlags *genericclioptions.ConfigFlags,
+	ioStreams genericiooptions.IOStreams) *cobra.Command {
 	printFlags := get.NewGetPrintFlags()
 
 	cmd := &cobra.Command{
@@ -119,18 +120,22 @@ func runListStorageClasses(
 	}
 
 	// Extract names from status.storageClass[].available[].name
-	names, err := extractStorageClassNames(tenant)
-	if err != nil {
-		return err
-	}
-
+	names := extractStorageClassNames(tenant)
 	if len(names) == 0 {
 		// Return an *empty* list to keep behavior close to `kubectl get storageclasses` with zero matches
-		return printStorageClassList(&storagev1.StorageClassList{Items: []storagev1.StorageClass{}}, printFlags, ioStreams)
+		return printStorageClassList(
+			&storagev1.StorageClassList{Items: []storagev1.StorageClass{}},
+			printFlags,
+			ioStreams)
 	}
 
 	// Fetch those StorageClasses
-	scList := &storagev1.StorageClassList{TypeMeta: metav1.TypeMeta{APIVersion: "storage.k8s.io/v1", Kind: "StorageClassList"}}
+	scList := &storagev1.StorageClassList{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "storage.k8s.io/v1",
+			Kind:       "StorageClassList",
+		},
+	}
 	for _, n := range names {
 		sc, err := kc.StorageV1().StorageClasses().Get(ctx, n, metav1.GetOptions{})
 		if err != nil {
@@ -149,11 +154,11 @@ func runListStorageClasses(
 	return printStorageClassList(scList, printFlags, ioStreams)
 }
 
-func extractStorageClassNames(u *unstructured.Unstructured) ([]string, error) {
+func extractStorageClassNames(u *unstructured.Unstructured) []string {
 	// status.storageClass: { available: []{ name: string } }
 	scList, found, err := unstructured.NestedSlice(u.Object, "status", "storageClass", "available")
 	if err != nil || !found {
-		return nil, nil
+		return nil
 	}
 
 	seen := map[string]struct{}{}
@@ -179,10 +184,11 @@ func extractStorageClassNames(u *unstructured.Unstructured) ([]string, error) {
 		}
 	}
 	sort.Strings(out)
-	return out, nil
+	return out
 }
 
-func printStorageClassList(scList *storagev1.StorageClassList, printFlags *get.PrintFlags, ioStreams genericiooptions.IOStreams) error {
+func printStorageClassList(scList *storagev1.StorageClassList, printFlags *get.PrintFlags,
+	ioStreams genericiooptions.IOStreams) error {
 	// Make sure storage API is in the scheme for printers
 	_ = storagev1.AddToScheme(scheme.Scheme)
 
