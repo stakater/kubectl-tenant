@@ -16,7 +16,7 @@ jobs:
       - name: Download dependencies
         run: go mod download
       - name: Lint
-        run: make lint TIMEOUT=5m
+        run: make lint
       - name: Test
         run: make test
       - name: Build

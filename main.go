@@ -156,7 +156,7 @@ func runListStorageClasses(
 
 func extractStorageClassNames(u *unstructured.Unstructured) []string {
 	// status.storageClass: { available: []{ name: string } }
-	scList, found, err := unstructured.NestedSlice(u.Object, "status", "storageClass", "available")
+	scList, found, err := unstructured.NestedSlice(u.Object, "status", "storageClasses", "available")
 	if err != nil || !found {
 		return nil
 	}
