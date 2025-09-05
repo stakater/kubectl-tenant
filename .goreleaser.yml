@@ -1,4 +1,5 @@
 # .goreleaser.yml
+project_name: kubectl-tenant
 version: 2
 
 before:
@@ -17,7 +18,8 @@ builds:
   - amd64
   - arm
   - arm64
-  main: ./cmd
+  main: ./main.go
+  binary: kubectl-tenant
 archives:
 - name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
 snapshot:
