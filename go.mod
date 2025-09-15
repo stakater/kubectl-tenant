@@ -1,4 +1,4 @@
-module github.com/stakater-ab/tenant-operator-cli
+module github.com/stakater/kubectl-tenant
 
 go 1.24.0
 
