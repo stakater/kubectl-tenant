@@ -1,4 +1,4 @@
-# kubectl-tenant (Multi Tenant Operator cliet plugin)
+# kubectl-tenant (Multi Tenant Operator client plugin)
 
 > ⚠️ **Disclaimer:** This tool is under active development. Features are limited, APIs may change, and code may undergo drastic revisions.
 
