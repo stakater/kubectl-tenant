@@ -13,6 +13,7 @@ const (
 	FeatureIngressClasses  Feature = "ingressClasses"
 	FeatureNamespaces      Feature = "namespaces"
 	FeatureAccessControl   Feature = "accessControl"
+	FeatureStorageClasses  Feature = "storageClasses"
 )
 
 type FeatureFlag struct {
@@ -40,7 +41,7 @@ func (c *Config) IsEnabled(feature Feature) bool {
 	}
 
 	switch feature {
-	case FeatureHibernation, FeatureAccessControl, FeatureNamespaces:
+	case FeatureStorageClasses:
 		return true
 	default:
 		return false

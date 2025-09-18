@@ -3,6 +3,8 @@ package client
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -148,4 +150,38 @@ func PrintTenantSpec(spec map[string]interface{}, indent string) {
 			fmt.Printf("%s%s: %v (type: %T)\n", indent, k, val, val)
 		}
 	}
+}
+
+// GetTenantStatusStorageClasses extracts storageClass names from Tenant's status
+func (tc *TenantClient) GetTenantStatusStorageClasses(ctx context.Context, tenantName string) ([]string, error) {
+	tenant, err := tc.dynClient.Resource(tc.gvr).Get(ctx, tenantName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tenant %q: %w", tenantName, err)
+	}
+
+	// Extract: status.storageClasses.available[].name
+	scList, found, err := unstructured.NestedSlice(tenant.Object, "status", "storageClasses", "available")
+	if err != nil || !found {
+		tc.Logger.Debug("No storageClasses found in tenant status", zap.String("tenant", tenantName))
+		return []string{}, nil
+	}
+
+	seen := map[string]struct{}{}
+	var names []string
+
+	for _, item := range scList {
+		if entry, ok := item.(map[string]interface{}); ok {
+			if nameRaw, ok := entry["name"]; ok {
+				if name, ok := nameRaw.(string); ok && strings.TrimSpace(name) != "" {
+					if _, exists := seen[name]; !exists {
+						seen[name] = struct{}{}
+						names = append(names, name)
+					}
+				}
+			}
+		}
+	}
+
+	sort.Strings(names)
+	return names, nil
 }

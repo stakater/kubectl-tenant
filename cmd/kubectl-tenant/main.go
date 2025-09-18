@@ -14,8 +14,3 @@ func main() {
 		panic(err)
 	}
 }
-
-func init() {
-	// Add subcommands here
-	// Example: rootCmd.AddCommand(listCmd)
-}

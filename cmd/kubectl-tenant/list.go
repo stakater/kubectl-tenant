@@ -13,7 +13,7 @@ import (
 	"github.com/stakater/kubectl-tenant/internal/featureflags"
 )
 
-var listCmd = &cobra.Command{
+var ListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all Tenant resources in the cluster",
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -76,5 +76,5 @@ var listCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(ListCmd)
 }
