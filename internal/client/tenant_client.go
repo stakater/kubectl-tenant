@@ -23,13 +23,14 @@ const (
 	Plural  = "tenants"
 )
 
+// internal/client/tenant_client.go
 type TenantClient struct {
-	dynClient     dynamic.Interface
-	gvr           schema.GroupVersionResource
+	DynClient     dynamic.Interface
+	Gvr           schema.GroupVersionResource
 	FeatureFlags  *featureflags.Config
 	Logger        *zap.Logger
-	timeout       time.Duration
-	specExtractor *TenantSpecExtractor // 👈 NEW
+	Timeout       time.Duration
+	specExtractor *TenantSpecExtractor
 }
 
 func NewTenantClient(ff *featureflags.Config, logger *zap.Logger) (*TenantClient, error) {
@@ -42,27 +43,27 @@ func NewTenantClient(ff *featureflags.Config, logger *zap.Logger) (*TenantClient
 		return nil, fmt.Errorf("failed to load kubeconfig: %w", err)
 	}
 
-	dynClient, err := dynamic.NewForConfig(config)
+	DynClient, err := dynamic.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
 	}
 
 	return &TenantClient{
-		dynClient:     dynClient,
-		gvr:           schema.GroupVersionResource{Group: Group, Version: Version, Resource: Plural},
+		DynClient:     DynClient,
+		Gvr:           schema.GroupVersionResource{Group: Group, Version: Version, Resource: Plural},
 		FeatureFlags:  ff,
 		Logger:        logger,
-		timeout:       30 * time.Second,
+		Timeout:       30 * time.Second,
 		specExtractor: NewTenantSpecExtractor(logger), // 👈 Initialize extractor
 	}, nil
 }
 
 // ListAllTenants fetches all Tenant CRs from cluster
 func (tc *TenantClient) ListAllTenants(ctx context.Context) ([]*unstructured.Unstructured, error) {
-	ctx, cancel := context.WithTimeout(ctx, tc.timeout)
+	ctx, cancel := context.WithTimeout(ctx, tc.Timeout)
 	defer cancel()
 
-	tenantClient := tc.dynClient.Resource(tc.gvr)
+	tenantClient := tc.DynClient.Resource(tc.Gvr)
 	tenantList, err := tenantClient.List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tenants: %w", err)
@@ -127,41 +128,41 @@ func (tc *TenantClient) fieldToFeature(field string) featureflags.Feature {
 
 // DELEGATE EXTRACTION METHODS TO specExtractor
 func (tc *TenantClient) GetTenantStatusStorageClasses(ctx context.Context, tenantName string) ([]string, error) {
-	return tc.specExtractor.GetTenantStatusStorageClasses(ctx, tc.dynClient, tc.gvr, tenantName)
+	return tc.specExtractor.GetTenantStatusStorageClasses(ctx, tc.DynClient, tc.Gvr, tenantName)
 }
 
 func (tc *TenantClient) GetTenantQuotaName(ctx context.Context, tenantName string) (string, error) {
-	return tc.specExtractor.GetTenantQuotaName(ctx, tc.dynClient, tc.gvr, tenantName)
+	return tc.specExtractor.GetTenantQuotaName(ctx, tc.DynClient, tc.Gvr, tenantName)
 }
 
 func (tc *TenantClient) GetTenantImageRegistries(ctx context.Context, tenantName string) ([]string, error) {
-	return tc.specExtractor.GetTenantImageRegistries(ctx, tc.dynClient, tc.gvr, tenantName)
+	return tc.specExtractor.GetTenantImageRegistries(ctx, tc.DynClient, tc.Gvr, tenantName)
 }
 
 func (tc *TenantClient) GetTenantIngressClasses(ctx context.Context, tenantName string) ([]string, error) {
-	return tc.specExtractor.GetTenantIngressClasses(ctx, tc.dynClient, tc.gvr, tenantName)
+	return tc.specExtractor.GetTenantIngressClasses(ctx, tc.DynClient, tc.Gvr, tenantName)
 }
 
 func (tc *TenantClient) GetTenantServiceAccountsDenied(ctx context.Context, tenantName string) ([]string, error) {
-	return tc.specExtractor.GetTenantServiceAccountsDenied(ctx, tc.dynClient, tc.gvr, tenantName)
+	return tc.specExtractor.GetTenantServiceAccountsDenied(ctx, tc.DynClient, tc.Gvr, tenantName)
 }
 
 func (tc *TenantClient) GetTenantNamespacesConfig(ctx context.Context, tenantName string) (map[string]interface{}, error) {
-	return tc.specExtractor.GetTenantNamespacesConfig(ctx, tc.dynClient, tc.gvr, tenantName)
+	return tc.specExtractor.GetTenantNamespacesConfig(ctx, tc.DynClient, tc.Gvr, tenantName)
 }
 
 func (tc *TenantClient) GetTenantHibernationConfig(ctx context.Context, tenantName string) (map[string]interface{}, error) {
-	return tc.specExtractor.GetTenantHibernationConfig(ctx, tc.dynClient, tc.gvr, tenantName)
+	return tc.specExtractor.GetTenantHibernationConfig(ctx, tc.DynClient, tc.Gvr, tenantName)
 }
 
 func (tc *TenantClient) GetTenantHostValidationConfig(ctx context.Context, tenantName string) (map[string]interface{}, error) {
-	return tc.specExtractor.GetTenantHostValidationConfig(ctx, tc.dynClient, tc.gvr, tenantName)
+	return tc.specExtractor.GetTenantHostValidationConfig(ctx, tc.DynClient, tc.Gvr, tenantName)
 }
 
 func (tc *TenantClient) GetTenantPodPriorityClasses(ctx context.Context, tenantName string) ([]string, error) {
-	return tc.specExtractor.GetTenantPodPriorityClasses(ctx, tc.dynClient, tc.gvr, tenantName)
+	return tc.specExtractor.GetTenantPodPriorityClasses(ctx, tc.DynClient, tc.Gvr, tenantName)
 }
 
 func (tc *TenantClient) GetTenantAccessControl(ctx context.Context, tenantName string) (map[string]interface{}, error) {
-	return tc.specExtractor.GetTenantAccessControl(ctx, tc.dynClient, tc.gvr, tenantName)
+	return tc.specExtractor.GetTenantAccessControl(ctx, tc.DynClient, tc.Gvr, tenantName)
 }

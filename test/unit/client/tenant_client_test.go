@@ -1,3 +1,4 @@
+// test/unit/client/tenant_client_test.go
 package client_test
 
 import (
@@ -10,21 +11,11 @@ import (
 	"go.uber.org/zap/zaptest"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
 
 	"github.com/stakater/kubectl-tenant/internal/client"
 	"github.com/stakater/kubectl-tenant/internal/featureflags"
 	"github.com/stakater/kubectl-tenant/test/unit/client/mocks"
 )
-
-type mockDynamicClient struct {
-	mock.Mock
-}
-
-func (m *mockDynamicClient) Resource(gvr schema.GroupVersionResource) dynamic.NamespaceableResourceInterface {
-	args := m.Called(gvr)
-	return args.Get(0).(dynamic.NamespaceableResourceInterface)
-}
 
 func TestTenantClient_ListAllTenants(t *testing.T) {
 	logger := zaptest.NewLogger(t)
@@ -32,7 +23,7 @@ func TestTenantClient_ListAllTenants(t *testing.T) {
 
 	mockClient := new(mocks.MockDynamicClient)
 	mockResource := new(mocks.MockNamespaceableResourceInterface)
-	// mockList := new(mocks.MockResourceInterface)
+	mockInterface := new(mocks.MockResourceInterface) // ← Only create if you use it
 
 	// Mock tenant list
 	tenantList := &unstructured.UnstructuredList{
@@ -52,14 +43,15 @@ func TestTenantClient_ListAllTenants(t *testing.T) {
 	}
 
 	mockClient.On("Resource", mock.Anything).Return(mockResource)
-	mockResource.On("List", mock.Anything, mock.Anything).Return(tenantList, nil)
+	mockResource.On("Namespace", "").Return(mockInterface)
+	mockInterface.On("List", mock.Anything, mock.Anything).Return(tenantList, nil)
 
 	tc := &client.TenantClient{
-		dynClient:    mockClient,
-		gvr:          schema.GroupVersionResource{Group: "tenantoperator.stakater.com", Version: "v1beta3", Resource: "tenants"},
+		DynClient:    mockClient,                                                                                                 // ✅ Exported field
+		Gvr:          schema.GroupVersionResource{Group: "tenantoperator.stakater.com", Version: "v1beta3", Resource: "tenants"}, // ✅ Exported field
 		FeatureFlags: ff,
 		Logger:       logger,
-		timeout:      30 * time.Second,
+		Timeout:      30 * time.Second, // ✅ Exported field
 	}
 
 	tenants, err := tc.ListAllTenants(context.Background())
