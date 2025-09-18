@@ -238,3 +238,38 @@ func (tc *TenantClient) GetTenantImageRegistries(ctx context.Context, tenantName
 	sort.Strings(registries)
 	return registries, nil
 }
+
+// GetTenantIngressClasses extracts .spec.ingressClasses.allowed from Tenant
+func (tc *TenantClient) GetTenantIngressClasses(ctx context.Context, tenantName string) ([]string, error) {
+	tenant, err := tc.dynClient.Resource(tc.gvr).Get(ctx, tenantName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tenant %q: %w", tenantName, err)
+	}
+
+	// Extract: spec.ingressClasses.allowed
+	allowed, found, err := unstructured.NestedStringSlice(tenant.Object, "spec", "ingressClasses", "allowed")
+	if err != nil {
+		return nil, fmt.Errorf("error reading spec.ingressClasses.allowed: %w", err)
+	}
+	if !found {
+		tc.Logger.Debug("No ingress classes found in tenant spec", zap.String("tenant", tenantName))
+		return []string{}, nil
+	}
+
+	// Dedupe and sort
+	seen := map[string]struct{}{}
+	var ingressClasses []string
+	for _, ic := range allowed {
+		ic = strings.TrimSpace(ic)
+		if ic == "" {
+			continue
+		}
+		if _, exists := seen[ic]; !exists {
+			seen[ic] = struct{}{}
+			ingressClasses = append(ingressClasses, ic)
+		}
+	}
+
+	sort.Strings(ingressClasses)
+	return ingressClasses, nil
+}
