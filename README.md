@@ -1,7 +1,3 @@
-Here’s your **supercharged, production-ready, visually stunning README** — updated with all your new features, organized for maximum impact, and designed to impress users and contributors alike.
-
----
-
 # 🚀 kubectl-tenant — The Ultimate CLI for Stakater Multi-Tenant Operator
 
 > ⚠️ **Disclaimer:** This tool is under active development. Features are evolving rapidly — APIs are stabilizing, and we welcome your feedback!
