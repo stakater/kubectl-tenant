@@ -149,3 +149,11 @@ func (tc *TenantClient) GetTenantServiceAccountsDenied(ctx context.Context, tena
 func (tc *TenantClient) GetTenantNamespacesConfig(ctx context.Context, tenantName string) (map[string]interface{}, error) {
 	return tc.specExtractor.GetTenantNamespacesConfig(ctx, tc.dynClient, tc.gvr, tenantName)
 }
+
+func (tc *TenantClient) GetTenantHibernationConfig(ctx context.Context, tenantName string) (map[string]interface{}, error) {
+	return tc.specExtractor.GetTenantHibernationConfig(ctx, tc.dynClient, tc.gvr, tenantName)
+}
+
+func (tc *TenantClient) GetTenantHostValidationConfig(ctx context.Context, tenantName string) (map[string]interface{}, error) {
+	return tc.specExtractor.GetTenantHostValidationConfig(ctx, tc.dynClient, tc.gvr, tenantName)
+}

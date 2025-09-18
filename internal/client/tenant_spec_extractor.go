@@ -185,3 +185,41 @@ func (tse *TenantSpecExtractor) GetTenantNamespacesConfig(ctx context.Context, d
 
 	return namespaces, nil
 }
+
+// GetTenantHibernationConfig extracts .spec.hibernation from Tenant
+func (tse *TenantSpecExtractor) GetTenantHibernationConfig(ctx context.Context, dynClient dynamic.Interface, gvr schema.GroupVersionResource, tenantName string) (map[string]interface{}, error) {
+	tenant, err := tse.getTenant(ctx, dynClient, gvr, tenantName)
+	if err != nil {
+		return nil, err
+	}
+
+	hibernation, found, err := unstructured.NestedMap(tenant.Object, "spec", "hibernation")
+	if err != nil {
+		return nil, fmt.Errorf("error reading spec.hibernation: %w", err)
+	}
+	if !found {
+		tse.logger.Debug("No hibernation config found in tenant spec", zap.String("tenant", tenantName))
+		return map[string]interface{}{}, nil
+	}
+
+	return hibernation, nil
+}
+
+// GetTenantHostValidationConfig extracts .spec.hostValidationConfig from Tenant
+func (tse *TenantSpecExtractor) GetTenantHostValidationConfig(ctx context.Context, dynClient dynamic.Interface, gvr schema.GroupVersionResource, tenantName string) (map[string]interface{}, error) {
+	tenant, err := tse.getTenant(ctx, dynClient, gvr, tenantName)
+	if err != nil {
+		return nil, err
+	}
+
+	hostValidation, found, err := unstructured.NestedMap(tenant.Object, "spec", "hostValidationConfig")
+	if err != nil {
+		return nil, fmt.Errorf("error reading spec.hostValidationConfig: %w", err)
+	}
+	if !found {
+		tse.logger.Debug("No host validation config found in tenant spec", zap.String("tenant", tenantName))
+		return map[string]interface{}{}, nil
+	}
+
+	return hostValidation, nil
+}
