@@ -185,3 +185,56 @@ func (tc *TenantClient) GetTenantStatusStorageClasses(ctx context.Context, tenan
 	sort.Strings(names)
 	return names, nil
 }
+
+// GetTenantQuotaName extracts .spec.quota from Tenant
+func (tc *TenantClient) GetTenantQuotaName(ctx context.Context, tenantName string) (string, error) {
+	tenant, err := tc.dynClient.Resource(tc.gvr).Get(ctx, tenantName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get tenant %q: %w", tenantName, err)
+	}
+
+	quotaName, found, err := unstructured.NestedString(tenant.Object, "spec", "quota")
+	if err != nil {
+		return "", fmt.Errorf("error reading spec.quota: %w", err)
+	}
+	if !found || quotaName == "" {
+		return "", fmt.Errorf("tenant %q has no spec.quota defined", tenantName)
+	}
+
+	return quotaName, nil
+}
+
+// GetTenantImageRegistries extracts .spec.imageRegistries.allowed from Tenant
+func (tc *TenantClient) GetTenantImageRegistries(ctx context.Context, tenantName string) ([]string, error) {
+	tenant, err := tc.dynClient.Resource(tc.gvr).Get(ctx, tenantName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tenant %q: %w", tenantName, err)
+	}
+
+	// Extract: spec.imageRegistries.allowed
+	allowed, found, err := unstructured.NestedStringSlice(tenant.Object, "spec", "imageRegistries", "allowed")
+	if err != nil {
+		return nil, fmt.Errorf("error reading spec.imageRegistries.allowed: %w", err)
+	}
+	if !found {
+		tc.Logger.Debug("No image registries found in tenant spec", zap.String("tenant", tenantName))
+		return []string{}, nil
+	}
+
+	// Dedupe and sort
+	seen := map[string]struct{}{}
+	var registries []string
+	for _, reg := range allowed {
+		reg = strings.TrimSpace(reg)
+		if reg == "" {
+			continue
+		}
+		if _, exists := seen[reg]; !exists {
+			seen[reg] = struct{}{}
+			registries = append(registries, reg)
+		}
+	}
+
+	sort.Strings(registries)
+	return registries, nil
+}
