@@ -42,7 +42,7 @@ func (c *Config) IsEnabled(feature Feature) bool {
 	}
 
 	switch feature {
-	case FeatureStorageClasses, FeatureQuota, FeatureImageRegistries, FeatureIngressClasses, FeatureServiceAccounts:
+	case FeatureStorageClasses, FeatureQuota, FeatureImageRegistries, FeatureIngressClasses, FeatureServiceAccounts, FeatureNamespaces:
 		return true
 	default:
 		return false

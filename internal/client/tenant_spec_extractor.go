@@ -166,3 +166,22 @@ func extractStringSliceFromMapSlice(slice []interface{}, key string) []string {
 	sort.Strings(result)
 	return result
 }
+
+// GetTenantNamespacesConfig extracts full .spec.namespaces from Tenant
+func (tse *TenantSpecExtractor) GetTenantNamespacesConfig(ctx context.Context, dynClient dynamic.Interface, gvr schema.GroupVersionResource, tenantName string) (map[string]interface{}, error) {
+	tenant, err := tse.getTenant(ctx, dynClient, gvr, tenantName)
+	if err != nil {
+		return nil, err
+	}
+
+	namespaces, found, err := unstructured.NestedMap(tenant.Object, "spec", "namespaces")
+	if err != nil {
+		return nil, fmt.Errorf("error reading spec.namespaces: %w", err)
+	}
+	if !found {
+		tse.logger.Debug("No namespaces config found in tenant spec", zap.String("tenant", tenantName))
+		return map[string]interface{}{}, nil
+	}
+
+	return namespaces, nil
+}
