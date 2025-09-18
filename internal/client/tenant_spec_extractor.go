@@ -223,3 +223,42 @@ func (tse *TenantSpecExtractor) GetTenantHostValidationConfig(ctx context.Contex
 
 	return hostValidation, nil
 }
+
+// GetTenantPodPriorityClasses extracts .spec.podPriorityClasses.allowed from Tenant
+func (tse *TenantSpecExtractor) GetTenantPodPriorityClasses(ctx context.Context, dynClient dynamic.Interface, gvr schema.GroupVersionResource, tenantName string) ([]string, error) {
+	tenant, err := tse.getTenant(ctx, dynClient, gvr, tenantName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract: spec.podPriorityClasses.allowed
+	allowed, found, err := unstructured.NestedStringSlice(tenant.Object, "spec", "podPriorityClasses", "allowed")
+	if err != nil {
+		return nil, fmt.Errorf("error reading spec.podPriorityClasses.allowed: %w", err)
+	}
+	if !found {
+		tse.logger.Debug("No pod priority classes found in tenant spec", zap.String("tenant", tenantName))
+		return []string{}, nil
+	}
+
+	return dedupeAndSort(allowed), nil
+}
+
+// GetTenantAccessControl extracts .spec.accessControl from Tenant
+func (tse *TenantSpecExtractor) GetTenantAccessControl(ctx context.Context, dynClient dynamic.Interface, gvr schema.GroupVersionResource, tenantName string) (map[string]interface{}, error) {
+	tenant, err := tse.getTenant(ctx, dynClient, gvr, tenantName)
+	if err != nil {
+		return nil, err
+	}
+
+	accessControl, found, err := unstructured.NestedMap(tenant.Object, "spec", "accessControl")
+	if err != nil {
+		return nil, fmt.Errorf("error reading spec.accessControl: %w", err)
+	}
+	if !found {
+		tse.logger.Debug("No access control config found in tenant spec", zap.String("tenant", tenantName))
+		return map[string]interface{}{}, nil
+	}
+
+	return accessControl, nil
+}

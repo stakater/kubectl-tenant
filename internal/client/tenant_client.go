@@ -157,3 +157,11 @@ func (tc *TenantClient) GetTenantHibernationConfig(ctx context.Context, tenantNa
 func (tc *TenantClient) GetTenantHostValidationConfig(ctx context.Context, tenantName string) (map[string]interface{}, error) {
 	return tc.specExtractor.GetTenantHostValidationConfig(ctx, tc.dynClient, tc.gvr, tenantName)
 }
+
+func (tc *TenantClient) GetTenantPodPriorityClasses(ctx context.Context, tenantName string) ([]string, error) {
+	return tc.specExtractor.GetTenantPodPriorityClasses(ctx, tc.dynClient, tc.gvr, tenantName)
+}
+
+func (tc *TenantClient) GetTenantAccessControl(ctx context.Context, tenantName string) (map[string]interface{}, error) {
+	return tc.specExtractor.GetTenantAccessControl(ctx, tc.dynClient, tc.gvr, tenantName)
+}
