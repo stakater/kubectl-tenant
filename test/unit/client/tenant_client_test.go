@@ -32,7 +32,7 @@ func TestTenantClient_ListAllTenants(t *testing.T) {
 
 	mockClient := new(mocks.MockDynamicClient)
 	mockResource := new(mocks.MockNamespaceableResourceInterface)
-	mockList := new(mocks.MockResourceInterface)
+	// mockList := new(mocks.MockResourceInterface)
 
 	// Mock tenant list
 	tenantList := &unstructured.UnstructuredList{
