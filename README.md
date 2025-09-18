@@ -136,6 +136,8 @@ kubectl tenant version                       # Show CLI + operator version
 
 ![MTO CLI](./docs/media/kubectl-demo.gif)
 
+### Commands
+
 ```bash
 # 1. List tenants
 kubectl tenant list
