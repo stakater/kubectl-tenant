@@ -208,7 +208,7 @@ kubectl-tenant
 ## 📈 Roadmap
 
 - ✅ `create`, `get`, `list`, `delete`, `edit`, `validate`
-- ✅ `quota`, `storageclasses`, `imageregistries`, `ingressclasses`, `serviceaccounts`
+- ✅ `quota`, `storageclasses`, `imageregistries`, `ingressclasses`, `serviceaccounts`, `hibernation`
 - 🚧 `kubectl tenant hibernate <tenant-name>` — Scale down tenant workloads
 - 🚧 `kubectl tenant wake <name>` — Scale up tenant workloads
 - 🚧 `kubectl tenant wizard` — Interactive TUI (Bubble Tea)
