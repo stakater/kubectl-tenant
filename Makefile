@@ -98,6 +98,23 @@ lint: golangci-lint ## Run golangci-lint linter
 .PHONY: test-lint
 test-lint: test lint ## Run tests and linter
 
+.PHONY: test-unit
+test-unit: ## Run unit tests
+	go test -v ./test/unit/... -cover
+
+.PHONY: test-commands
+test-commands: ## Run command tests
+	go test -v ./test/unit/commands/... -cover
+
+.PHONY: test-all
+test-all: test-unit test-commands ## Run all tests
+
+.PHONY: cover
+cover: ## Generate coverage report
+	go test -coverprofile=$(LOCALBIN)/coverage.out ./test/unit/...
+	go tool cover -html=$(LOCALBIN)/coverage.out -o $(LOCALBIN)/coverage.html
+	@echo "Coverage report generated: $(LOCALBIN)/coverage.html"
+
 # ==============================
 # CLEAN & RELEASE
 # ==============================

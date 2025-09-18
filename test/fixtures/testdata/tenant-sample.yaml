@@ -1,0 +1,23 @@
+apiVersion: tenantoperator.stakater.com/v1beta3
+kind: Tenant
+metadata:
+  name: tenant-sample
+spec:
+  quota: small
+  accessControl:
+    owners:
+      users:
+        - kubeadmin
+      groups:
+        - admin-group
+  hibernation:
+    sleepSchedule: "20 * * * *"
+    wakeSchedule: "40 * * * *"
+  namespaces:
+    sandboxes:
+      enabled: true
+      private: true
+  imageRegistries:
+    allowed:
+      - ghcr.io
+      - docker.io
