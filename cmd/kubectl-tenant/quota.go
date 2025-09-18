@@ -59,7 +59,6 @@ func newQuotaCmd() *cobra.Command {
 				return fmt.Errorf("failed to create dynamic client: %w", err)
 			}
 
-			// ✅ USE CONSTRUCTOR — DO NOT SET PRIVATE FIELDS
 			tenantClient, err := client.NewTenantClient(ff, logger)
 			if err != nil {
 				return err
@@ -95,7 +94,7 @@ func newQuotaCmd() *cobra.Command {
 			}
 
 			fmt.Fprintln(cmd.OutOrStdout(), "Quota Spec:")
-			printQuotaSpec(spec, "  ", cmd.OutOrStdout()) // ✅ Pass io.Writer
+			printQuotaSpec(spec, "  ", cmd.OutOrStdout()) //
 
 			return nil
 		},

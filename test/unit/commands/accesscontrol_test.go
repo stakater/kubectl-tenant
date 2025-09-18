@@ -13,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	ktcmd "github.com/stakater/kubectl-tenant/cmd/kubectl-tenant" // 👈 Import cmd package
+	ktcmd "github.com/stakater/kubectl-tenant/cmd/kubectl-tenant"
 	"github.com/stakater/kubectl-tenant/internal/client"
 	"github.com/stakater/kubectl-tenant/internal/featureflags"
 	"github.com/stakater/kubectl-tenant/test/unit/client/mocks"

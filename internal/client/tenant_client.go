@@ -54,7 +54,7 @@ func NewTenantClient(ff *featureflags.Config, logger *zap.Logger) (*TenantClient
 		FeatureFlags:  ff,
 		Logger:        logger,
 		Timeout:       30 * time.Second,
-		specExtractor: NewTenantSpecExtractor(logger), // 👈 Initialize extractor
+		specExtractor: NewTenantSpecExtractor(logger),
 	}, nil
 }
 

@@ -47,11 +47,11 @@ func TestTenantClient_ListAllTenants(t *testing.T) {
 	mockInterface.On("List", mock.Anything, mock.Anything).Return(tenantList, nil)
 
 	tc := &client.TenantClient{
-		DynClient:    mockClient,                                                                                                 // ✅ Exported field
-		Gvr:          schema.GroupVersionResource{Group: "tenantoperator.stakater.com", Version: "v1beta3", Resource: "tenants"}, // ✅ Exported field
+		DynClient:    mockClient,
+		Gvr:          schema.GroupVersionResource{Group: "tenantoperator.stakater.com", Version: "v1beta3", Resource: "tenants"}, // Exported field
 		FeatureFlags: ff,
 		Logger:       logger,
-		Timeout:      30 * time.Second, // ✅ Exported field
+		Timeout:      30 * time.Second, // Exported field
 	}
 
 	tenants, err := tc.ListAllTenants(context.Background())

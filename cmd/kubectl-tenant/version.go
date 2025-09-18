@@ -41,7 +41,6 @@ func printOperatorVersion() error {
 		return fmt.Errorf("failed to load kubeconfig: %w", err)
 	}
 
-	// ✅ Use ApiextensionsV1 client — NOT core kubernetes client
 	apiextClient, err := apiextclient.NewForConfig(config)
 	if err != nil {
 		return fmt.Errorf("failed to create apiextensions client: %w", err)
