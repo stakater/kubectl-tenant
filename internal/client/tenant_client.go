@@ -273,3 +273,38 @@ func (tc *TenantClient) GetTenantIngressClasses(ctx context.Context, tenantName 
 	sort.Strings(ingressClasses)
 	return ingressClasses, nil
 }
+
+// GetTenantServiceAccountsDenied extracts .spec.serviceAccounts.denied from Tenant
+func (tc *TenantClient) GetTenantServiceAccountsDenied(ctx context.Context, tenantName string) ([]string, error) {
+	tenant, err := tc.dynClient.Resource(tc.gvr).Get(ctx, tenantName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tenant %q: %w", tenantName, err)
+	}
+
+	// Extract: spec.serviceAccounts.denied
+	denied, found, err := unstructured.NestedStringSlice(tenant.Object, "spec", "serviceAccounts", "denied")
+	if err != nil {
+		return nil, fmt.Errorf("error reading spec.serviceAccounts.denied: %w", err)
+	}
+	if !found {
+		tc.Logger.Debug("No denied service accounts found in tenant spec", zap.String("tenant", tenantName))
+		return []string{}, nil
+	}
+
+	// Dedupe and sort
+	seen := map[string]struct{}{}
+	var serviceAccounts []string
+	for _, sa := range denied {
+		sa = strings.TrimSpace(sa)
+		if sa == "" {
+			continue
+		}
+		if _, exists := seen[sa]; !exists {
+			seen[sa] = struct{}{}
+			serviceAccounts = append(serviceAccounts, sa)
+		}
+	}
+
+	sort.Strings(serviceAccounts)
+	return serviceAccounts, nil
+}
