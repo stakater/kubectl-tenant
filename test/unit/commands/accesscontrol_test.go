@@ -8,10 +8,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
+	ktcmd "github.com/stakater/kubectl-tenant/cmd/kubectl-tenant" // 👈 Import cmd package
 	"github.com/stakater/kubectl-tenant/internal/client"
 	"github.com/stakater/kubectl-tenant/internal/featureflags"
 	"github.com/stakater/kubectl-tenant/test/unit/client/mocks"
@@ -48,19 +50,24 @@ func TestAccessControlCommand(t *testing.T) {
 	mockResource.On("Namespace", "").Return(mockInterface)
 	mockInterface.On("Get", mock.Anything, "tenant-sample", mock.Anything).Return(tenant, nil)
 
+	// ✅ Use exported fields
+	tc := &client.TenantClient{
+		DynClient:    mockClient,
+		Gvr:          schema.GroupVersionResource{Group: "tenantoperator.stakater.com", Version: "v1beta3", Resource: "tenants"},
+		FeatureFlags: featureflags.NewConfig(),
+		Logger:       zaptest.NewLogger(t), // ✅ Returns *zap.Logger
+		Timeout:      30 * time.Second,
+	}
+
+	// ✅ Override function for test
 	originalNewTenantClient := client.NewTenantClient
-	client.NewTenantClient = func(ff *featureflags.Config, logger *zaptest.Logger) (*client.TenantClient, error) {
-		return &client.TenantClient{
-			dynClient:    mockClient,
-			gvr:          schema.GroupVersionResource{Group: "tenantoperator.stakater.com", Version: "v1beta3", Resource: "tenants"},
-			FeatureFlags: ff,
-			Logger:       logger,
-			timeout:      30 * time.Second,
-		}, nil
+	client.NewTenantClient = func(ff *featureflags.Config, logger *zap.Logger) (*client.TenantClient, error) {
+		return tc, nil
 	}
 	defer func() { client.NewTenantClient = originalNewTenantClient }()
 
-	cmd := tenant.NewAccessControlCmd()
+	// ✅ Use correct package
+	cmd := ktcmd.NewAccessControlCmd()
 	cmd.SetArgs([]string{"tenant-sample"})
 
 	var out bytes.Buffer
