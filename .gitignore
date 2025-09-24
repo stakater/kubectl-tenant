@@ -51,3 +51,4 @@ __pycache__/
 bin/
 dist/
 .env
+playground/

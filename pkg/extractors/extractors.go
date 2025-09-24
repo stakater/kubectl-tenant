@@ -5,35 +5,23 @@ import (
 	"sort"
 	"strings"
 
-	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func ExtractStorageClassNames(tenant *unstructured.Unstructured, logger *zap.Logger) ([]string, error) {
-	// First try status.storageClasses.available (from status)
-	if names := ExtractFromStatus(tenant, []string{"status", "storageClasses", "available"}, "name", logger); len(names) > 0 {
-		return names, nil
-	}
-
-	// Fallback to spec if needed (uncomment if your tenant spec has storageClasses)
-	// return extractFromSpec(tenant, []string{"spec", "storageClasses", "allowed"}, logger), nil
-
-	return []string{}, nil
+func ExtractStorageClassNames(u *unstructured.Unstructured) ([]string, error) {
+	return extractFromSpecStringSlice(u, []string{"spec", "storageClasses", "allowed"})
 }
 
-func ExtractIngressClassNames(tenant *unstructured.Unstructured, logger *zap.Logger) ([]string, error) {
-	// Extract from spec.ingressClasses.allowed
-	return ExtractFromSpec(tenant, []string{"spec", "ingressClasses", "allowed"}, logger), nil
+func ExtractIngressClassNames(u *unstructured.Unstructured) ([]string, error) {
+	return extractFromSpecStringSlice(u, []string{"spec", "ingressClasses", "allowed"})
 }
 
-func ExtractPriorityClassNames(tenant *unstructured.Unstructured, logger *zap.Logger) ([]string, error) {
-	// Extract from spec.podPriorityClasses.allowed
-	return ExtractFromSpec(tenant, []string{"spec", "podPriorityClasses", "allowed"}, logger), nil
+func ExtractPriorityClassNames(u *unstructured.Unstructured) ([]string, error) {
+	return extractFromSpecStringSlice(u, []string{"spec", "podPriorityClasses", "allowed"})
 }
 
-func ExtractResourceQuotaNames(tenant *unstructured.Unstructured, logger *zap.Logger) ([]string, error) {
-	// Extract single quota name from spec.quota
-	quotaName, found, err := unstructured.NestedString(tenant.Object, "spec", "quota")
+func ExtractResourceQuotaNames(u *unstructured.Unstructured) ([]string, error) {
+	quotaName, found, err := unstructured.NestedString(u.Object, "spec", "quota")
 	if err != nil {
 		return nil, fmt.Errorf("reading spec.quota: %w", err)
 	}
@@ -43,61 +31,71 @@ func ExtractResourceQuotaNames(tenant *unstructured.Unstructured, logger *zap.Lo
 	return []string{quotaName}, nil
 }
 
-// -------- helper extraction functions --------
+func ExtractNamespaceNames(u *unstructured.Unstructured) ([]string, error) {
+	var allNamespaces []string
+	tenantName := u.GetName()
 
-// extractFromStatus extracts names from a slice of objects in tenant status
-func ExtractFromStatus(tenant *unstructured.Unstructured, path []string, nameField string, logger *zap.Logger) []string {
-	slice, found, err := unstructured.NestedSlice(tenant.Object, path...)
-	if err != nil || !found {
-		logger.Debug("Path not found in tenant status", zap.Strings("path", path))
-		return []string{}
+	// Extract from spec.namespaces.withoutTenantPrefix
+	withoutPrefix, _, _ := unstructured.NestedStringSlice(u.Object, "spec", "namespaces", "withoutTenantPrefix")
+	allNamespaces = append(allNamespaces, withoutPrefix...)
+
+	// Extract from spec.namespaces.withTenantPrefix and prepend tenant name
+	withPrefix, _, _ := unstructured.NestedStringSlice(u.Object, "spec", "namespaces", "withTenantPrefix")
+	for _, ns := range withPrefix {
+		allNamespaces = append(allNamespaces, tenantName+"-"+ns)
 	}
 
-	seen := map[string]struct{}{}
-	var out []string
-	for _, item := range slice {
-		itemMap, ok := item.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		// Try both lowercase and capitalized field names
-		var nameRaw interface{}
-		if val, ok := itemMap[nameField]; ok {
-			nameRaw = val
-		} else if val, ok := itemMap[strings.Title(nameField)]; ok {
-			nameRaw = val
-		}
-
-		name, ok := nameRaw.(string)
-		if !ok {
-			continue
-		}
-
-		name = strings.TrimSpace(name)
-		if name == "" {
-			continue
-		}
-
-		if _, exists := seen[name]; !exists {
-			seen[name] = struct{}{}
-			out = append(out, name)
-		}
+	// Check for sandboxes if enabled
+	sandboxEnabled, found, _ := unstructured.NestedBool(u.Object, "spec", "namespaces", "sandboxes", "enabled")
+	if found && sandboxEnabled {
+		// Add sandbox namespace (typically tenant-name-sandbox)
+		allNamespaces = append(allNamespaces, tenantName+"-sandbox")
 	}
 
-	sort.Strings(out)
-	return out
+	return UniqSorted(allNamespaces), nil
 }
 
-// extractFromSpec extracts string slice from tenant spec
-func ExtractFromSpec(tenant *unstructured.Unstructured, path []string, logger *zap.Logger) []string {
-	slice, found, err := unstructured.NestedStringSlice(tenant.Object, path...)
-	if err != nil || !found {
-		logger.Debug("Path not found in tenant spec", zap.Strings("path", path))
-		return []string{}
+func ExtractServiceAccountNames(u *unstructured.Unstructured) ([]string, error) {
+	denied, _, _ := unstructured.NestedStringSlice(u.Object, "spec", "serviceAccounts", "denied")
+	if len(denied) > 0 {
+		return []string{}, fmt.Errorf("tenant has denied service accounts: %v. Use kubectl get serviceaccounts to see all and filter manually", denied)
 	}
+	return []string{}, nil
+}
 
-	return UniqSorted(slice)
+func ExtractClusterRoleNames(u *unstructured.Unstructured) ([]string, error) {
+	// Extract roles from accessControl configuration
+	var roles []string
+
+	// This would require parsing the accessControl structure to determine
+	// what ClusterRoles are granted to the tenant users/groups
+	// For now, return empty list - this would need custom logic based on your RBAC setup
+	return roles, nil
+}
+
+func ExtractRoleNames(u *unstructured.Unstructured) ([]string, error) {
+	// Similar to ClusterRoles - would need custom logic to determine
+	// which Roles are created for this tenant
+	return []string{}, nil
+}
+
+func ExtractRoleBindingNames(u *unstructured.Unstructured) ([]string, error) {
+	// Similar to Roles - would need custom logic to determine
+	// which RoleBindings are created for this tenant
+	return []string{}, nil
+}
+
+// ---- Helper functions ----
+
+func extractFromSpecStringSlice(u *unstructured.Unstructured, path []string) ([]string, error) {
+	slice, found, err := unstructured.NestedStringSlice(u.Object, path...)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", strings.Join(path, "."), err)
+	}
+	if !found {
+		return []string{}, nil
+	}
+	return UniqSorted(slice), nil
 }
 
 func UniqSorted(in []string) []string {

@@ -6,11 +6,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/stakater/kubectl-tenant/internal/config"
-	r "github.com/stakater/kubectl-tenant/internal/resources"
-	"go.uber.org/zap"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/kubectl/pkg/cmd/get"
+
+	r "github.com/stakater/kubectl-tenant/internal/resources"
 )
 
 func main() {
@@ -28,7 +27,26 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "kubectl-tenant",
 		Short: "CLI for managing Tenant CRs from Stakater Tenant Operator",
+		Long: `kubectl-tenant is a kubectl plugin for interacting with Tenant Custom Resources
+from the Stakater Tenant Operator.
+
+It provides commands to list and inspect resources that are allowed/available
+for specific tenants, with output formats compatible with kubectl.`,
+		Example: `  # List storage classes allowed for a tenant
+  kubectl tenant get my-tenant storageclasses
+
+  # Get resources in JSON format  
+  kubectl tenant get my-tenant storageclasses -o json
+
+  # List namespaces for a tenant
+  kubectl tenant get my-tenant namespaces
+
+  # List all resources for a tenant
+  kubectl tenant get my-tenant all`,
 	}
+
+	// Create print flags that will be shared across commands
+	printFlags := get.NewGetPrintFlags()
 
 	getCmd := &cobra.Command{
 		Use:   "get TENANT RESOURCE [-n NAMESPACE] [-o json|yaml|wide|name|...]",
@@ -38,15 +56,10 @@ func newRootCmd() *cobra.Command {
 This behaves like 'kubectl get <resource>', but filtered to those resources
 that are allowed/available for the specified Tenant CR.
 
-Examples:
-  # List storage classes allowed for tenant 'my-tenant'
-  kubectl tenant get my-tenant storageclasses
-
-  # Get in JSON format
-  kubectl tenant get my-tenant storageclasses -o json
-
-  # List ingress classes for tenant in specific namespace
-  kubectl tenant get my-tenant ingressclasses -n tenant-namespace`,
+Supported resource types:
+- Cluster-scoped: storageclasses, ingressclasses, priorityclasses, clusterroles
+- Namespaced: resourcequotas, namespaces, serviceaccounts, roles, rolebindings
+- Special: all (shows all supported resources)`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			tenantName := args[0]
@@ -56,9 +69,19 @@ Examples:
 				ns = *flags.Namespace
 			}
 
-			opts, ok := r.SupportedResources[resourceKey]
-			if !ok {
-				return fmt.Errorf("unsupported resource %q; supported: %s", resourceKey, r.Keys(r.SupportedResources))
+			// Special case: "all" shows all resources
+			if resourceKey == "all" {
+				return r.ListAllResources(cmd.Context(), flags, ns, tenantName, io)
+			}
+
+			// Try cluster resources first, then namespaced
+			var opts r.GetOptions
+			var ok bool
+			if opts, ok = r.ClusterResources[resourceKey]; !ok {
+				if opts, ok = r.NamespacedResources[resourceKey]; !ok {
+					allResources := append(r.Keys(r.ClusterResources), r.Keys(r.NamespacedResources)...)
+					return fmt.Errorf("unsupported resource %q; supported: %s, all", resourceKey, strings.Join(allResources, ", "))
+				}
 			}
 
 			cfg, err := flags.ToRESTConfig()
@@ -66,34 +89,15 @@ Examples:
 				return err
 			}
 
-			// Load feature flags
-			ff, err := config.LoadOrCreateConfig()
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			// Check if feature is enabled
-			if !ff.IsEnabled(opts.Feature) {
-				return fmt.Errorf("feature %q is disabled", opts.Feature)
-			}
-
-			// Initialize logger
-			logger, err := zap.NewProduction()
-			if err != nil {
-				return fmt.Errorf("failed to initialize logger: %w", err)
-			}
-			defer logger.Sync()
-
-			// Use kubectl-style printers
-			printFlags := get.NewGetPrintFlags()
-			printFlags.AddFlags(cmd)
-			_ = printFlags.EnsureWithNamespace()
-
-			return r.ListResources(cmd.Context(), cfg, ns, tenantName, resourceKey, opts, printFlags, io, logger)
+			return r.ListResources(cmd.Context(), cfg, ns, tenantName, resourceKey, opts, printFlags, io)
 		},
 	}
 
+	// Add flags to commands
 	flags.AddFlags(root.PersistentFlags())
+	printFlags.AddFlags(getCmd)
+	printFlags.EnsureWithNamespace()
+
 	root.AddCommand(getCmd)
 	return root
 }
