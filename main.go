@@ -165,7 +165,7 @@ func listResources(
 		return printResourceList(resourceName, []runtime.Object{}, printFlags, ioStreams)
 	}
 
-	var items []runtime.Object
+	items := make([]runtime.Object, 0, len(names))
 	for _, name := range names {
 		obj, err := fetchResources(ctx, kc, opts.resource, name)
 		if err != nil {
@@ -181,7 +181,12 @@ func listResources(
 	return printResourceList(resourceName, items, printFlags, ioStreams)
 }
 
-func fetchResources(ctx context.Context, kc *kubernetes.Clientset, gvr schema.GroupVersionResource, name string) (runtime.Object, error) {
+func fetchResources(
+	ctx context.Context,
+	kc *kubernetes.Clientset,
+	gvr schema.GroupVersionResource,
+	name string) (runtime.Object, error) {
+
 	switch gvr.Resource {
 	case "storageclasses":
 		return kc.StorageV1().StorageClasses().Get(ctx, name, metav1.GetOptions{})
