@@ -10,18 +10,13 @@ import (
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 
 	"github.com/spf13/cobra"
-	corev1 "k8s.io/api/core/v1"
-	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/cmd/get"
-	"k8s.io/kubectl/pkg/scheme"
 )
 
 const (
@@ -30,6 +25,7 @@ const (
 
 type getOptions struct {
 	resource               schema.GroupVersionResource
+	listKind               string
 	extractTenantResources func(*unstructured.Unstructured) []string
 }
 
@@ -40,6 +36,7 @@ var ClusterResources = map[string]getOptions{
 			Version:  "v1",
 			Resource: "storageclasses",
 		},
+		listKind:               "StorageClassList",
 		extractTenantResources: extractStorageClassNames,
 	},
 	"namespaces": {
@@ -48,6 +45,7 @@ var ClusterResources = map[string]getOptions{
 			Version:  "v1",
 			Resource: "namespaces",
 		},
+		listKind:               "NamespaceList",
 		extractTenantResources: extractNamespaceNames,
 	},
 }
@@ -59,12 +57,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-func init() {
-	// Make sure storage API is in the scheme for printers
-	_ = storagev1.AddToScheme(scheme.Scheme)
-	_ = corev1.AddToScheme(scheme.Scheme)
 }
 
 func newRootCmd() *cobra.Command {
@@ -119,7 +111,7 @@ the Tenant CR status (tenant.tenantoperator.stakater.com).`, resourceName, resou
 				return err
 			}
 			ctx := cmd.Context()
-			return listResources(ctx, cfg, tenantName, resourceName, opts, printFlags, ioStreams)
+			return listResources(ctx, cfg, tenantName, opts, printFlags, ioStreams)
 		},
 	}
 
@@ -131,19 +123,12 @@ func listResources(
 	ctx context.Context,
 	cfg *rest.Config,
 	tenantName string,
-	resourceName string,
 	opts getOptions,
 	printFlags *get.PrintFlags,
 	ioStreams genericiooptions.IOStreams,
 ) error {
 	// dynamic client to read the Tenant (unstructured)
 	dyn, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		return err
-	}
-
-	// typed client to fetch the resource
-	kc, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return err
 	}
@@ -162,12 +147,12 @@ func listResources(
 
 	names := opts.extractTenantResources(tenant)
 	if len(names) == 0 {
-		return printResourceList(resourceName, []runtime.Object{}, printFlags, ioStreams)
+		return printResourceList(opts, []*unstructured.Unstructured{}, printFlags, ioStreams)
 	}
 
-	items := make([]runtime.Object, 0, len(names))
+	items := make([]*unstructured.Unstructured, 0, len(names))
 	for _, name := range names {
-		obj, err := fetchResources(ctx, kc, opts.resource, name)
+		obj, err := dyn.Resource(opts.resource).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			// If a name listed in the Tenant doesn't exist, skip it but keep going
 			continue
@@ -176,36 +161,10 @@ func listResources(
 	}
 	// Sort by name to keep stable output (like kubectl)
 	sort.Slice(items, func(i, j int) bool {
-		return getObjectName(items[i]) < getObjectName(items[j])
+		return items[i].GetName() < items[j].GetName()
 	})
-	return printResourceList(resourceName, items, printFlags, ioStreams)
-}
 
-func fetchResources(
-	ctx context.Context,
-	kc *kubernetes.Clientset,
-	gvr schema.GroupVersionResource,
-	name string) (runtime.Object, error) {
-
-	switch gvr.Resource {
-	case "storageclasses":
-		return kc.StorageV1().StorageClasses().Get(ctx, name, metav1.GetOptions{})
-	case "namespaces":
-		return kc.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
-	default:
-		return nil, fmt.Errorf("unsupported resource type: %s", gvr.Resource)
-	}
-}
-
-func getObjectName(obj runtime.Object) string {
-	switch v := obj.(type) {
-	case *storagev1.StorageClass:
-		return v.Name
-	case *corev1.Namespace:
-		return v.Name
-	default:
-		panic(fmt.Sprintf("unsupported type: %T", obj))
-	}
+	return printResourceList(opts, items, printFlags, ioStreams)
 }
 
 func extractStorageClassNames(u *unstructured.Unstructured) []string {
@@ -279,8 +238,8 @@ func extractNamespaceNames(u *unstructured.Unstructured) []string {
 }
 
 func printResourceList(
-	resourceName string,
-	items []runtime.Object,
+	opts getOptions,
+	items []*unstructured.Unstructured,
 	printFlags *get.PrintFlags,
 	ioStreams genericiooptions.IOStreams,
 ) error {
@@ -289,40 +248,16 @@ func printResourceList(
 		return err
 	}
 
-	// Create the appropriate list object based on resource type
-	var listObj runtime.Object
-	switch resourceName {
-	case "storageclasses":
-		scList := &storagev1.StorageClassList{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "storage.k8s.io/v1",
-				Kind:       "StorageClassList",
-			},
-		}
-		for _, item := range items {
-			if sc, ok := item.(*storagev1.StorageClass); ok {
-				scList.Items = append(scList.Items, *sc)
-			}
-		}
-		listObj = scList
-
-	case "namespaces":
-		nsList := &corev1.NamespaceList{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       "NamespaceList",
-			},
-		}
-		for _, item := range items {
-			if ns, ok := item.(*corev1.Namespace); ok {
-				nsList.Items = append(nsList.Items, *ns)
-			}
-		}
-		listObj = nsList
-
-	default:
-		return fmt.Errorf("unsupported resource type for printing: %s", resourceName)
+	list := &unstructured.UnstructuredList{
+		Object: map[string]interface{}{
+			"apiVersion": opts.resource.GroupVersion().String(),
+			"kind":       opts.listKind,
+		},
 	}
 
-	return p.PrintObj(listObj, ioStreams.Out)
+	for _, item := range items {
+		list.Items = append(list.Items, *item)
+	}
+
+	return p.PrintObj(list, ioStreams.Out)
 }
