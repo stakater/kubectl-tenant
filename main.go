@@ -10,6 +10,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -27,6 +28,30 @@ const (
 	PluginName = "kubectl-tenant"
 )
 
+type getOptions struct {
+	resource               schema.GroupVersionResource
+	extractTenantResources func(*unstructured.Unstructured) []string
+}
+
+var ClusterResources = map[string]getOptions{
+	"storageclasses": {
+		resource: schema.GroupVersionResource{
+			Group:    "storage.k8s.io",
+			Version:  "v1",
+			Resource: "storageclasses",
+		},
+		extractTenantResources: extractStorageClassNames,
+	},
+	"namespaces": {
+		resource: schema.GroupVersionResource{
+			Group:    "",
+			Version:  "v1",
+			Resource: "namespaces",
+		},
+		extractTenantResources: extractNamespaceNames,
+	},
+}
+
 func main() {
 	cmd := newRootCmd()
 	if err := cmd.Execute(); err != nil {
@@ -34,6 +59,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func init() {
+	// Make sure storage API is in the scheme for printers
+	_ = storagev1.AddToScheme(scheme.Scheme)
+	_ = corev1.AddToScheme(scheme.Scheme)
 }
 
 func newRootCmd() *cobra.Command {
@@ -45,30 +76,40 @@ func newRootCmd() *cobra.Command {
 		Short: "Tenant-related helpers for kubectl",
 	}
 
-	// Extensible: add more groups later; for now we only support list storageclasses
-	listCmd := &cobra.Command{
-		Use:   "list",
-		Short: "List tenant resources",
-	}
-	listCmd.AddCommand(newListStorageClassesCmd(flags, ioStreams))
-
+	getCmd := newGetCmd(flags, ioStreams)
 	flags.AddFlags(root.PersistentFlags())
-	root.AddCommand(listCmd)
+	root.AddCommand(getCmd)
 	return root
 }
 
-func newListStorageClassesCmd(configFlags *genericclioptions.ConfigFlags,
+func newGetCmd(configFlags *genericclioptions.ConfigFlags, ioStreams genericiooptions.IOStreams) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "get",
+		Short: "Get tenant-scoped resources",
+		Long: `Get cluster-scoped Kubernetes resources filtered by tenant permissions.
+
+This behaves like 'kubectl get <resource>', but filtered to those resources
+permitted for the specified tenant according to the Tenant CR status.`,
+	}
+
+	for resourceName, opts := range ClusterResources {
+		cmd.AddCommand(newGetResourceCmd(resourceName, opts, configFlags, ioStreams))
+	}
+
+	return cmd
+}
+
+func newGetResourceCmd(resourceName string, opts getOptions, configFlags *genericclioptions.ConfigFlags,
 	ioStreams genericiooptions.IOStreams) *cobra.Command {
 	printFlags := get.NewGetPrintFlags()
 
 	cmd := &cobra.Command{
-		Use:   "storageclasses",
-		Short: "List StorageClasses permitted for a Tenant",
-		Long: `List StorageClasses permitted for a Tenant.
+		Use:   resourceName + " <tenant>",
+		Short: fmt.Sprintf("List %s permitted for a Tenant", resourceName),
+		Long: fmt.Sprintf(`List %s permitted for a Tenant.
 
-This behaves like 'kubectl get storageclasses', but filtered to those listed in
-.status.storageClasses[].available[].name of the Tenant CR
-(tenant.tenantoperator.stakater.com).`,
+This behaves like 'kubectl get %s', but filtered to those listed in
+the Tenant CR status (tenant.tenantoperator.stakater.com).`, resourceName, resourceName),
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			tenantName := args[0]
@@ -78,20 +119,20 @@ This behaves like 'kubectl get storageclasses', but filtered to those listed in
 				return err
 			}
 			ctx := cmd.Context()
-			return runListStorageClasses(ctx, cfg, tenantName, printFlags, ioStreams)
+			return listResources(ctx, cfg, tenantName, resourceName, opts, printFlags, ioStreams)
 		},
 	}
 
 	printFlags.AddFlags(cmd)
-	// mimic kubectl defaults (human-readable table if no -o provided)
-	// _ = printFlags.EnsureWithNamespace()
 	return cmd
 }
 
-func runListStorageClasses(
+func listResources(
 	ctx context.Context,
 	cfg *rest.Config,
 	tenantName string,
+	resourceName string,
+	opts getOptions,
 	printFlags *get.PrintFlags,
 	ioStreams genericiooptions.IOStreams,
 ) error {
@@ -101,7 +142,7 @@ func runListStorageClasses(
 		return err
 	}
 
-	// typed client to fetch StorageClasses
+	// typed client to fetch the resource
 	kc, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return err
@@ -114,48 +155,55 @@ func runListStorageClasses(
 	}
 
 	var tenant *unstructured.Unstructured
-	tenant, err = dyn.Resource(tenantGVR).Get(ctx, tenantName, metav1.GetOptions{}, "status")
+	tenant, err = dyn.Resource(tenantGVR).Get(ctx, tenantName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("get tenant %q: %w", tenantName, err)
 	}
 
-	// Extract names from status.storageClass[].available[].name
-	names := extractStorageClassNames(tenant)
+	names := opts.extractTenantResources(tenant)
 	if len(names) == 0 {
-		// Return an *empty* list to keep behavior close to `kubectl get storageclasses` with zero matches
-		return printStorageClassList(
-			&storagev1.StorageClassList{Items: []storagev1.StorageClass{}},
-			printFlags,
-			ioStreams)
+		return printResourceList(resourceName, []runtime.Object{}, printFlags, ioStreams)
 	}
 
-	// Fetch those StorageClasses
-	scList := &storagev1.StorageClassList{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "storage.k8s.io/v1",
-			Kind:       "StorageClassList",
-		},
-	}
-	for _, n := range names {
-		sc, err := kc.StorageV1().StorageClasses().Get(ctx, n, metav1.GetOptions{})
+	var items []runtime.Object
+	for _, name := range names {
+		obj, err := fetchResources(ctx, kc, opts.resource, name)
 		if err != nil {
 			// If a name listed in the Tenant doesn't exist, skip it but keep going
-			// (You could gate this behind a --strict flag if desired).
 			continue
 		}
-		scList.Items = append(scList.Items, *sc)
+		items = append(items, obj)
 	}
-
 	// Sort by name to keep stable output (like kubectl)
-	sort.Slice(scList.Items, func(i, j int) bool {
-		return scList.Items[i].Name < scList.Items[j].Name
+	sort.Slice(items, func(i, j int) bool {
+		return getObjectName(items[i]) < getObjectName(items[j])
 	})
+	return printResourceList(resourceName, items, printFlags, ioStreams)
+}
 
-	return printStorageClassList(scList, printFlags, ioStreams)
+func fetchResources(ctx context.Context, kc *kubernetes.Clientset, gvr schema.GroupVersionResource, name string) (runtime.Object, error) {
+	switch gvr.Resource {
+	case "storageclasses":
+		return kc.StorageV1().StorageClasses().Get(ctx, name, metav1.GetOptions{})
+	case "namespaces":
+		return kc.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
+	default:
+		return nil, fmt.Errorf("unsupported resource type: %s", gvr.Resource)
+	}
+}
+
+func getObjectName(obj runtime.Object) string {
+	switch v := obj.(type) {
+	case *storagev1.StorageClass:
+		return v.Name
+	case *corev1.Namespace:
+		return v.Name
+	default:
+		panic(fmt.Sprintf("unsupported type: %T", obj))
+	}
 }
 
 func extractStorageClassNames(u *unstructured.Unstructured) []string {
-	// status.storageClass: { available: []{ name: string } }
 	scList, found, err := unstructured.NestedSlice(u.Object, "status", "storageClasses", "available")
 	if err != nil || !found {
 		return nil
@@ -187,19 +235,89 @@ func extractStorageClassNames(u *unstructured.Unstructured) []string {
 	return out
 }
 
-func printStorageClassList(scList *storagev1.StorageClassList, printFlags *get.PrintFlags,
-	ioStreams genericiooptions.IOStreams) error {
-	// Make sure storage API is in the scheme for printers
-	_ = storagev1.AddToScheme(scheme.Scheme)
+func extractNamespaceNames(u *unstructured.Unstructured) []string {
+	seen := map[string]struct{}{}
+	var out []string
 
+	deployedNs, found, err := unstructured.NestedStringSlice(u.Object, "status", "deployedNamespaces")
+	if err == nil && found {
+		for _, ns := range deployedNs {
+			ns = strings.TrimSpace(ns)
+			if ns != "" {
+				if _, dup := seen[ns]; !dup {
+					seen[ns] = struct{}{}
+					out = append(out, ns)
+				}
+			}
+		}
+	}
+
+	sandboxes, found, err := unstructured.NestedMap(u.Object, "status", "deployedSandboxes")
+	if err == nil && found {
+		for _, val := range sandboxes {
+			ns, ok := val.(string)
+			if !ok {
+				continue
+			}
+			ns = strings.TrimSpace(ns)
+			if ns != "" {
+				if _, dup := seen[ns]; !dup {
+					seen[ns] = struct{}{}
+					out = append(out, ns)
+				}
+			}
+		}
+	}
+
+	sort.Strings(out)
+	return out
+}
+
+func printResourceList(
+	resourceName string,
+	items []runtime.Object,
+	printFlags *get.PrintFlags,
+	ioStreams genericiooptions.IOStreams,
+) error {
 	p, err := printFlags.ToPrinter()
 	if err != nil {
 		return err
 	}
 
-	// If human-readable (no -o), use the table printer like kubectl does
-	// Otherwise, ToPrinter() already handles json|yaml|name|custom-columns, etc.
-	// The cli-runtime TablePrinter needs a runtime.Object and a scheme that knows the type.
-	var obj runtime.Object = scList
-	return p.PrintObj(obj, ioStreams.Out)
+	// Create the appropriate list object based on resource type
+	var listObj runtime.Object
+	switch resourceName {
+	case "storageclasses":
+		scList := &storagev1.StorageClassList{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "storage.k8s.io/v1",
+				Kind:       "StorageClassList",
+			},
+		}
+		for _, item := range items {
+			if sc, ok := item.(*storagev1.StorageClass); ok {
+				scList.Items = append(scList.Items, *sc)
+			}
+		}
+		listObj = scList
+
+	case "namespaces":
+		nsList := &corev1.NamespaceList{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "NamespaceList",
+			},
+		}
+		for _, item := range items {
+			if ns, ok := item.(*corev1.Namespace); ok {
+				nsList.Items = append(nsList.Items, *ns)
+			}
+		}
+		listObj = nsList
+
+	default:
+		return fmt.Errorf("unsupported resource type for printing: %s", resourceName)
+	}
+
+	return p.PrintObj(listObj, ioStreams.Out)
 }
