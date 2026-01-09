@@ -59,7 +59,7 @@ kubectl tenant get <resource> <tenant>
 ```
 ### Examples
 
-- StorageClasses
+- Storage Classes
   ```bash
   # Get tenant-scoped storageclasses
   kubectl tenant get storageclasses my-tenant
