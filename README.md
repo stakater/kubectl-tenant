@@ -11,6 +11,7 @@ It provides tenant-scoped Kubernetes operations to simplify cluster multi-tenanc
 
 * Adds a `kubectl tenant` subcommand set.
 * Current supported resources:
+
   * Storage Classes `kubectl tenant get storageclasses <tenant>`
   * Namespaces `kubectl tenant get namespaces <tenant>`
 * Functions like `kubectl get <resource>` but **filters output for the specified tenant**.
