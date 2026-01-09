@@ -10,12 +10,11 @@ It provides tenant-scoped Kubernetes operations to simplify cluster multi-tenanc
 ## Features
 
 * Adds a `kubectl tenant` subcommand set.
-* Current support:
-
-  * `kubectl tenant get storageclasses <tenant>`
-
-    * Functions like `kubectl get storageclasses` but **filters output for the specified tenant**.
-    * Ensures tenants can only discover their own storage classes instead of all storage classes available in the cluster (limitation of native RBAC on `list`).
+* Current supported resources:
+  * Storage Classes `kubectl tenant get storageclasses <tenant>`
+  * Namespaces `kubectl tenant get namespaces <tenant>`
+* Functions like `kubectl get <resource>` but **filters output for the specified tenant**.
+* Ensures tenants can only discover their own resources (storageclasses/namespaces) instead of all resources available in the cluster (limitation of native RBAC on `list`).
 
 ---
 
@@ -28,7 +27,7 @@ It provides tenant-scoped Kubernetes operations to simplify cluster multi-tenanc
 
 ### Installation
 
-Download the prebuilt binary for your platform from the [GitHub Releases](https://github.com/stakater/kubectl-tenant/releases), place it somewhere on your system, and make sure that directory is in your `$PATH`.
+Download the prebuilt binary for your platform from the [GitHub Releases](https://github.com/stakater/kubectl-tenant/releases), place it somewhere on your system, and make su(storageclasses/namespaces)re that directory is in your `$PATH`.
 
 Example:
 
@@ -54,16 +53,34 @@ mv kubectl-tenant ~/.local/bin/
 ### Usage
 
 ```bash
-# Get tenant-scoped storageclasses
-kubectl tenant get storageclasses my-tenant
+# Get tenant-scoped resources
+kubectl tenant get <resource> <tenant>
 ```
+### Examples
 
-Example output:
-
-```bash
-NAME                  PROVISIONER                AGE
-my-tenant-sc          kubernetes.io/no-provisioner   5d
-```
+- StorageClasses
+  ```bash
+  # Get tenant-scoped storageclasses
+  kubectl tenant get storageclasses my-tenant
+  ```
+  Example output:
+  
+  ```bash
+  NAME                  PROVISIONER                    AGE
+  my-tenant-sc          kubernetes.io/no-provisioner   5d
+  ```
+- Namespaces
+  ```bash
+  # Get tenant-scoped namespaces
+  kubectl tenant get namesapces my-tenant
+  ```
+  Example output:
+  
+  ```bash
+  NAME                        AGE
+  my-tenant-prod              5d
+  my-tenant-sandbox           7d
+  ```
 
 ---
 
