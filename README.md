@@ -91,6 +91,22 @@ mv kubectl-tenant ~/.local/bin/
 
 ---
 
+## Documentation
+
+### Auto-Generated CLI Reference
+
+This plugin includes built-in documentation generation using Cobra's doc generator. The generated Markdown files provide a complete CLI reference that is suitable for users, maintainers, and AI/LLM indexing.
+
+**Generate documentation:**
+```bash
+kubectl-tenant docs                 # Generates in ./docs/
+kubectl-tenant docs -o /custom/path # Custom output directory
+```
+
+The documentation is automatically generated and updated during releases, and can be found in the [`docs/`](./docs) directory.
+
+---
+
 ## Documentation & References
 
 * **Multi Tenant Operator:** [https://www.stakater.com/multi-tenant-operator](https://www.stakater.com/mto)

@@ -4,16 +4,17 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
-	"k8s.io/cli-runtime/pkg/genericiooptions"
-
 	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/cmd/get"
@@ -66,11 +67,18 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "tenant",
 		Short: "Tenant-related helpers for kubectl",
+		Long: `kubectl-tenant extends kubectl with tenant-scoped resource operations.
+
+It works with Stakater's Multi Tenant Operator to provide filtered views of 
+cluster-scoped resources based on tenant permissions.`,
 	}
 
 	getCmd := newGetCmd(flags, ioStreams)
+	docsCmd := newDocsCmd(root)
+
 	flags.AddFlags(root.PersistentFlags())
 	root.AddCommand(getCmd)
+	root.AddCommand(docsCmd)
 	return root
 }
 
@@ -91,6 +99,34 @@ permitted for the specified tenant according to the Tenant CR status.`,
 	return cmd
 }
 
+func newDocsCmd(root *cobra.Command) *cobra.Command {
+	var outputDir string
+
+	cmd := &cobra.Command{
+		Use:    "docs",
+		Short:  "Generate documentation for kubectl-tenant",
+		Long:   `Generate Markdown documentation for all kubectl-tenant commands.`,
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := os.MkdirAll(outputDir, 0755); err != nil {
+				return fmt.Errorf("failed to create output directory: %w", err)
+			}
+
+			if err := doc.GenMarkdownTree(root, outputDir); err != nil {
+				return fmt.Errorf("failed to generate docs: %w", err)
+			}
+
+			absPath, _ := filepath.Abs(outputDir)
+			fmt.Printf("Documentation generated successfully in: %s\n", absPath)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&outputDir, "output", "o", "./docs", "Output directory for generated documentation")
+
+	return cmd
+}
+
 func newGetResourceCmd(resourceName string, opts getOptions, configFlags *genericclioptions.ConfigFlags,
 	ioStreams genericiooptions.IOStreams) *cobra.Command {
 	printFlags := get.NewGetPrintFlags()
@@ -102,6 +138,14 @@ func newGetResourceCmd(resourceName string, opts getOptions, configFlags *generi
 
 This behaves like 'kubectl get %s', but filtered to those listed in
 the Tenant CR status (tenant.tenantoperator.stakater.com).`, resourceName, resourceName),
+		Example: fmt.Sprintf(`  # List %s for my-tenant
+  kubectl tenant get %s my-tenant
+
+  # Output in JSON format
+  kubectl tenant get %s my-tenant -o json
+
+  # Output in YAML format  
+  kubectl tenant get %s my-tenant -o yaml`, resourceName, resourceName, resourceName, resourceName),
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			tenantName := args[0]
