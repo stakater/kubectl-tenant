@@ -132,21 +132,22 @@ func newGetResourceCmd(resourceName string, opts getOptions, configFlags *generi
 	printFlags := get.NewGetPrintFlags()
 
 	cmd := &cobra.Command{
-		Use:   resourceName + " <tenant>",
+		Use:   resourceName + " <tenant> [resource-name]",
 		Short: fmt.Sprintf("List %s permitted for a Tenant", resourceName),
 		Long: fmt.Sprintf(`List %s permitted for a Tenant.
 
 This behaves like 'kubectl get %s', but filtered to those listed in
-the Tenant CR status (tenant.tenantoperator.stakater.com).`, resourceName, resourceName),
+the Tenant CR status (tenant.tenantoperator.stakater.com).
+
+When a specific resource name is provided, the command validates tenant access
+and passes through to kubectl for native output.`, resourceName, resourceName),
 		Example: fmt.Sprintf(`  # List %s for my-tenant
   kubectl tenant get %s my-tenant
 
-  # Output in JSON format
-  kubectl tenant get %s my-tenant -o json
-
-  # Output in YAML format  
-  kubectl tenant get %s my-tenant -o yaml`, resourceName, resourceName, resourceName, resourceName),
-		Args: cobra.ExactArgs(1),
+  # Get a specific %s
+  kubectl tenant get %s my-tenant specific-resource`,
+			resourceName, resourceName, resourceName, resourceName),
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			tenantName := args[0]
 
@@ -155,12 +156,71 @@ the Tenant CR status (tenant.tenantoperator.stakater.com).`, resourceName, resou
 				return err
 			}
 			ctx := cmd.Context()
+
+			// If a specific resource name is provided, validate and get it
+			if len(args) > 1 {
+				resourceToGet := args[1]
+				return handleSpecificResource(ctx, cfg, tenantName, resourceName, resourceToGet, opts, printFlags, ioStreams)
+			}
+
 			return listResources(ctx, cfg, tenantName, opts, printFlags, ioStreams)
 		},
 	}
 
 	printFlags.AddFlags(cmd)
 	return cmd
+}
+
+func handleSpecificResource(
+	ctx context.Context,
+	cfg *rest.Config,
+	tenantName string,
+	resourceType string,
+	resourceName string,
+	opts getOptions,
+	printFlags *get.PrintFlags,
+	ioStreams genericiooptions.IOStreams,
+) error {
+	dyn, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		return err
+	}
+
+	tenantGVR := schema.GroupVersionResource{
+		Group:    "tenantoperator.stakater.com",
+		Version:  "v1beta3",
+		Resource: "tenants",
+	}
+
+	tenant, err := dyn.Resource(tenantGVR).Get(ctx, tenantName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("get tenant %q: %w", tenantName, err)
+	}
+
+	allowedResources := opts.extractTenantResources(tenant)
+
+	allowed := false
+	for _, name := range allowedResources {
+		if name == resourceName {
+			allowed = true
+			break
+		}
+	}
+
+	if !allowed {
+		return fmt.Errorf("%s %q is not permitted for tenant %q", resourceType, resourceName, tenantName)
+	}
+
+	obj, err := dyn.Resource(opts.resource).Get(ctx, resourceName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	p, err := printFlags.ToPrinter()
+	if err != nil {
+		return err
+	}
+	return p.PrintObj(obj, ioStreams.Out)
 }
 
 func listResources(

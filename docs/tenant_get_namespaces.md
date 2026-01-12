@@ -9,8 +9,11 @@ List namespaces permitted for a Tenant.
 This behaves like 'kubectl get namespaces', but filtered to those listed in
 the Tenant CR status (tenant.tenantoperator.stakater.com).
 
+When a specific resource name is provided, the command validates tenant access
+and passes through to kubectl for native output.
+
 ```
-tenant get namespaces <tenant> [flags]
+tenant get namespaces <tenant> [resource-name] [flags]
 ```
 
 ### Examples
@@ -19,11 +22,8 @@ tenant get namespaces <tenant> [flags]
   # List namespaces for my-tenant
   kubectl tenant get namespaces my-tenant
 
-  # Output in JSON format
-  kubectl tenant get namespaces my-tenant -o json
-
-  # Output in YAML format  
-  kubectl tenant get namespaces my-tenant -o yaml
+  # Get a specific namespaces
+  kubectl tenant get namespaces my-tenant specific-resource
 ```
 
 ### Options
