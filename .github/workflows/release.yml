@@ -23,13 +23,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Generate CLI documentation
-        if: success()
-        run: |
-          go build -o kubectl-tenant
-          ./kubectl-tenant docs -o docs/
-
-      - name: Commit and push documentation
+      - name: Generate LLM-ready documentation
         if: success()
         run: |
           git config --local user.email "action@github.com"
