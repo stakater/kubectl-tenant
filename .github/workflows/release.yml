@@ -13,7 +13,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.25.5'
           
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
@@ -22,3 +22,16 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Generate LLM-ready documentation
+        if: success()
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add docs/*.md
+          if git diff --staged --quiet; then
+            echo "Documentation is up to date"
+          else
+            git commit -m "docs: regenerate LLM-ready CLI documentation [skip ci]"
+            git push
+          fi
