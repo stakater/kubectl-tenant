@@ -80,7 +80,6 @@ NAME            PROVISIONER                    AGE
 my-tenant-sc    kubernetes.io/no-provisioner   5d
 ```
 
-
 **Namespaces**
 
 **List all namespaces for a tenant:**
@@ -120,6 +119,40 @@ cd kubectl-tenant
 go build -o kubectl-tenant
 mv kubectl-tenant ~/.local/bin/
 ```
+
+---
+
+## Testing
+
+### Unit Tests
+
+```bash
+make test
+```
+
+### E2E Tests
+
+E2E tests run against a real Kubernetes cluster with Multi Tenant Operator installed.
+
+**Prerequisites:**
+* [k3d](https://k3d.io/) installed
+* [Helm](https://helm.sh/) installed
+
+**Run all steps manually:**
+
+| Target | Description |
+|--------|-------------|
+| `make e2e-setup` | Creates a k3d cluster, installs cert-manager, MTO, and creates a TenantQuota |
+| `make e2e` | Runs the e2e tests against the cluster |
+| `make e2e-cleanup` | Deletes the k3d cluster |
+
+**Run everything in one command:**
+
+```bash
+make e2e-full
+```
+
+This will create the cluster, run tests, and delete the cluster automatically.
 
 ---
 

@@ -147,7 +147,7 @@ and passes through to kubectl for native output.`, resourceName, resourceName),
   # Get a specific %s
   kubectl tenant get %s my-tenant specific-resource`,
 			resourceName, resourceName, resourceName, resourceName),
-		Args: cobra.MinimumNArgs(1),
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			tenantName := args[0]
 
