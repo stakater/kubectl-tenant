@@ -39,8 +39,8 @@ lint: golangci-lint ## Run golangci-lint linter
 	$(GOLANGCI_LINT) run
 
 .PHONY: test
-test: ## Run unit tests
-	go test ./...
+test: ## Run unit tests [skip e2e]
+	go test $$(go list ./... | grep -v /e2e)
 
 .PHONY: build
 build: $(OUTPUT_DIR) ## Build the plugin binary
