@@ -105,6 +105,11 @@ my-tenant-prod    Active   5d
 ```
 
 ---
+## Demo
+
+![kubectl tenant rbac demo](./images/kubectlTenantRbacDemo.gif)
+
+---
 
 ## Building from Source
 
