@@ -86,7 +86,6 @@ e2e-install-mto: ## Install MTO via Helm
 		--namespace $(MTO_NAMESPACE) \
 		--create-namespace \
 		--version $(MTO_CHART_VERSION) \
-		--set 'webhook.manager.env.bypassedGroups=system:masters' \
 		--wait --timeout 5m
 	@echo "Waiting for MTO pods..."
 	kubectl wait --for=condition=Ready pods --all -n $(MTO_NAMESPACE) --timeout=180s
