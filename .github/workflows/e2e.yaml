@@ -1,0 +1,38 @@
+name: "E2E Tests"
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  e2e-tests:
+    name: Run E2E Tests
+    if: ${{ github.event.label.name == 'ok-to-test' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Remove the test label
+        uses: actions-ecosystem/action-remove-labels@v1
+        with:
+          labels: ok-to-test
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install k3d
+        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+
+      - name: Setup cluster and install MTO
+        run: make e2e-setup
+
+      - name: Run E2E tests
+        run: make e2e
+
+      - name: Cleanup
+        if: always()
+        run: make e2e-cleanup

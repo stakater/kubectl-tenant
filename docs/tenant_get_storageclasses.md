@@ -9,8 +9,11 @@ List storageclasses permitted for a Tenant.
 This behaves like 'kubectl get storageclasses', but filtered to those listed in
 the Tenant CR status (tenant.tenantoperator.stakater.com).
 
+When a specific resource name is provided, the command validates tenant access
+and passes through to kubectl for native output.
+
 ```
-tenant get storageclasses <tenant> [flags]
+tenant get storageclasses <tenant> [resource-name] [flags]
 ```
 
 ### Examples
@@ -19,11 +22,8 @@ tenant get storageclasses <tenant> [flags]
   # List storageclasses for my-tenant
   kubectl tenant get storageclasses my-tenant
 
-  # Output in JSON format
-  kubectl tenant get storageclasses my-tenant -o json
-
-  # Output in YAML format  
-  kubectl tenant get storageclasses my-tenant -o yaml
+  # Get a specific storageclasses
+  kubectl tenant get storageclasses my-tenant specific-resource
 ```
 
 ### Options

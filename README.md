@@ -8,11 +8,15 @@ It provides tenant-scoped Kubernetes operations to simplify cluster multi-tenanc
 ### Example Usage
 
 ```bash
-# Get tenant-scoped resources
+# List all tenant-scoped resources
 kubectl tenant get <resource> <tenant>
 
-# Example: Get storage classes for my-tenant
-kubectl tenant get storageclasses my-tenant
+# Get a specific tenant-scoped resource
+kubectl tenant get <resource> <tenant> <resource-name>
+
+# Examples
+kubectl tenant get storageclasses my-tenant              # List all storage classes
+kubectl tenant get namespaces my-tenant my-namespace     # Get specific namespace
 ```
 
 ---
@@ -22,6 +26,7 @@ kubectl tenant get storageclasses my-tenant
 * Adds a `kubectl tenant` subcommand set.
 * Functions like `kubectl get <resource>` but **filters output for the specified tenant**.
 * Ensures tenants can only discover their own resources instead of all resources available in the cluster (limitation of native RBAC on `list`).
+* Supports both **listing all tenant resources** and **getting specific resources** with tenant access validation.
 
 ### Current Supported Resources
 
@@ -53,6 +58,8 @@ mv kubectl-tenant ~/.local/bin/   # ensure this path is in your $PATH
 ### Examples
 
 **Storage Classes**
+
+**List all storage classes for a tenant:**
 ```bash
 kubectl tenant get storageclasses my-tenant
 ```
@@ -60,9 +67,22 @@ Example output:
 ```bash
 NAME                  PROVISIONER                    AGE
 my-tenant-sc          kubernetes.io/no-provisioner   5d
+my-tenant-fast        kubernetes.io/aws-ebs          3d
+```
+
+**Get a specific storage class:**
+```bash
+kubectl tenant get storageclasses my-tenant my-tenant-sc
+```
+Example output:
+```bash
+NAME            PROVISIONER                    AGE
+my-tenant-sc    kubernetes.io/no-provisioner   5d
 ```
 
 **Namespaces**
+
+**List all namespaces for a tenant:**
 ```bash
 kubectl tenant get namespaces my-tenant
 ```
@@ -70,8 +90,24 @@ Example output:
 ```bash
 NAME                        AGE
 my-tenant-prod              5d
-my-tenant-sandbox           7d
+my-tenant-staging           7d
+my-tenant-sandbox           10d
 ```
+
+**Get a specific namespace:**
+```bash
+kubectl tenant get namespaces my-tenant my-tenant-prod
+```
+Example output:
+```bash
+NAME              STATUS   AGE
+my-tenant-prod    Active   5d
+```
+
+---
+## Demo
+
+![kubectl tenant rbac demo](./images/kubectlTenantRbacDemo.gif)
 
 ---
 
@@ -88,6 +124,40 @@ cd kubectl-tenant
 go build -o kubectl-tenant
 mv kubectl-tenant ~/.local/bin/
 ```
+
+---
+
+## Testing
+
+### Unit Tests
+
+```bash
+make test
+```
+
+### E2E Tests
+
+E2E tests run against a real Kubernetes cluster with Multi Tenant Operator installed.
+
+**Prerequisites:**
+* [k3d](https://k3d.io/) installed
+* [Helm](https://helm.sh/) installed
+
+**Run all steps manually:**
+
+| Target | Description |
+|--------|-------------|
+| `make e2e-setup` | Creates a k3d cluster, installs cert-manager, MTO, and creates a TenantQuota |
+| `make e2e` | Runs the e2e tests against the cluster |
+| `make e2e-cleanup` | Deletes the k3d cluster |
+
+**Run everything in one command:**
+
+```bash
+make e2e-full
+```
+
+This will create the cluster, run tests, and delete the cluster automatically.
 
 ---
 
