@@ -49,6 +49,33 @@ var ClusterResources = map[string]getOptions{
 		listKind:               "NamespaceList",
 		extractTenantResources: extractNamespaceNames,
 	},
+	"ingressclasses": {
+		resource: schema.GroupVersionResource{
+			Group:    "networking.k8s.io",
+			Version:  "v1",
+			Resource: "ingressclasses",
+		},
+		listKind:               "IngressClassList",
+		extractTenantResources: extractIngressClassNames,
+	},
+	"priorityclasses": {
+		resource: schema.GroupVersionResource{
+			Group:    "scheduling.k8s.io",
+			Version:  "v1",
+			Resource: "priorityclasses",
+		},
+		listKind:               "PriorityClassList",
+		extractTenantResources: extractPodPriorityClassNames,
+	},
+	"quotas": {
+		resource: schema.GroupVersionResource{
+			Group:    "tenantoperator.stakater.com",
+			Version:  "v1beta1",
+			Resource: "quotas",
+		},
+		listKind:               "QuotaList",
+		extractTenantResources: extractQuotaNames,
+	},
 }
 
 func main() {
@@ -271,8 +298,8 @@ func listResources(
 	return printResourceList(opts, items, printFlags, ioStreams)
 }
 
-func extractStorageClassNames(u *unstructured.Unstructured) []string {
-	scList, found, err := unstructured.NestedSlice(u.Object, "status", "storageClasses", "available")
+func extractAvailableNames(u *unstructured.Unstructured, statusField string) []string {
+	list, found, err := unstructured.NestedSlice(u.Object, "status", statusField, "available")
 	if err != nil || !found {
 		return nil
 	}
@@ -280,17 +307,12 @@ func extractStorageClassNames(u *unstructured.Unstructured) []string {
 	seen := map[string]struct{}{}
 	var out []string
 
-	for _, scEntry := range scList {
-		sc, ok := scEntry.(map[string]interface{})
+	for _, entry := range list {
+		e, ok := entry.(map[string]interface{})
 		if !ok {
 			continue
 		}
-
-		var raw any
-		if v, ok := sc["name"]; ok {
-			raw = v
-		}
-		n, ok := raw.(string)
+		n, ok := e["name"].(string)
 		if !ok || strings.TrimSpace(n) == "" {
 			continue
 		}
@@ -301,6 +323,22 @@ func extractStorageClassNames(u *unstructured.Unstructured) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func extractStorageClassNames(u *unstructured.Unstructured) []string {
+	return extractAvailableNames(u, "storageClasses")
+}
+
+func extractIngressClassNames(u *unstructured.Unstructured) []string {
+	return extractAvailableNames(u, "ingressClasses")
+}
+
+func extractPodPriorityClassNames(u *unstructured.Unstructured) []string {
+	return extractAvailableNames(u, "podPriorityClasses")
+}
+
+func extractQuotaNames(u *unstructured.Unstructured) []string {
+	return extractAvailableNames(u, "quota")
 }
 
 func extractNamespaceNames(u *unstructured.Unstructured) []string {
