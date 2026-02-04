@@ -9,6 +9,11 @@ K3D_CLUSTER_NAME ?= kubectl-tenant-e2e
 MTO_NAMESPACE ?= multi-tenant-operator
 MTO_CHART_VERSION ?= 1.5.1
 
+# Override MTO image for testing with PR builds
+# Usage: make e2e-install-mto MTO_IMAGE_TAG=snapshot-pr-916-e3ab5be0 (leave tag empty to use chart default)
+MTO_IMAGE_REPO ?= ghcr.io/stakater/tenant-operator
+MTO_IMAGE_TAG ?= snapshot-pr-916-e3ab5be0
+
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary (ideally with version)
 # $2 - package url which can be installed
@@ -72,11 +77,11 @@ e2e-install-cert-manager: ## Install cert-manager (required by MTO)
 	@echo "Installing cert-manager..."
 	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.5/cert-manager.yaml
 	@echo "Waiting for cert-manager namespace and pods..."
-	kubectl wait --for=condition=Ready pods --all -n cert-manager --timeout=300s
+	kubectl wait --for=condition=Ready pods --all -n cert-manager --timeout=600s
 	@echo "Waiting for cert-manager webhook to be ready..."
-	kubectl wait --for=condition=Available deployment/cert-manager -n cert-manager --timeout=180s
-	kubectl wait --for=condition=Available deployment/cert-manager-webhook -n cert-manager --timeout=180s
-	kubectl wait --for=condition=Available deployment/cert-manager-cainjector -n cert-manager --timeout=180s
+	kubectl wait --for=condition=Available deployment/cert-manager -n cert-manager --timeout=300s
+	kubectl wait --for=condition=Available deployment/cert-manager-webhook -n cert-manager --timeout=300s
+	kubectl wait --for=condition=Available deployment/cert-manager-cainjector -n cert-manager --timeout=300s
 	@echo "Verifying cert-manager webhook is responding..."
 
 .PHONY: e2e-install-mto
@@ -86,6 +91,7 @@ e2e-install-mto: ## Install MTO via Helm
 		--namespace $(MTO_NAMESPACE) \
 		--create-namespace \
 		--version $(MTO_CHART_VERSION) \
+		$(if $(MTO_IMAGE_TAG),--set tenantController.manager.image.repository=$(MTO_IMAGE_REPO) --set tenantController.manager.image.tag=$(MTO_IMAGE_TAG),) \
 		--wait --timeout 5m
 	@echo "Waiting for MTO pods..."
 	kubectl wait --for=condition=Ready pods --all -n $(MTO_NAMESPACE) --timeout=180s
