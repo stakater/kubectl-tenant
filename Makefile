@@ -7,7 +7,7 @@ GOLANGCI_LINT_VERSION ?= v1.64.8
 # E2E config
 K3D_CLUSTER_NAME ?= kubectl-tenant-e2e
 MTO_NAMESPACE ?= multi-tenant-operator
-MTO_CHART_VERSION ?= 1.5.1
+MTO_CHART_VERSION ?= 1.5.2
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary (ideally with version)
@@ -72,11 +72,11 @@ e2e-install-cert-manager: ## Install cert-manager (required by MTO)
 	@echo "Installing cert-manager..."
 	kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.5/cert-manager.yaml
 	@echo "Waiting for cert-manager namespace and pods..."
-	kubectl wait --for=condition=Ready pods --all -n cert-manager --timeout=300s
+	kubectl wait --for=condition=Ready pods --all -n cert-manager --timeout=600s
 	@echo "Waiting for cert-manager webhook to be ready..."
-	kubectl wait --for=condition=Available deployment/cert-manager -n cert-manager --timeout=180s
-	kubectl wait --for=condition=Available deployment/cert-manager-webhook -n cert-manager --timeout=180s
-	kubectl wait --for=condition=Available deployment/cert-manager-cainjector -n cert-manager --timeout=180s
+	kubectl wait --for=condition=Available deployment/cert-manager -n cert-manager --timeout=300s
+	kubectl wait --for=condition=Available deployment/cert-manager-webhook -n cert-manager --timeout=300s
+	kubectl wait --for=condition=Available deployment/cert-manager-cainjector -n cert-manager --timeout=300s
 	@echo "Verifying cert-manager webhook is responding..."
 
 .PHONY: e2e-install-mto
