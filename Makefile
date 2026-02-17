@@ -7,12 +7,7 @@ GOLANGCI_LINT_VERSION ?= v1.64.8
 # E2E config
 K3D_CLUSTER_NAME ?= kubectl-tenant-e2e
 MTO_NAMESPACE ?= multi-tenant-operator
-MTO_CHART_VERSION ?= 1.5.1
-
-# Override MTO image for testing with PR builds
-# Usage: make e2e-install-mto MTO_IMAGE_TAG=snapshot-pr-916-e3ab5be0 (leave tag empty to use chart default)
-MTO_IMAGE_REPO ?= ghcr.io/stakater/tenant-operator
-MTO_IMAGE_TAG ?= snapshot-pr-916-e3ab5be0
+MTO_CHART_VERSION ?= 1.5.2
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary (ideally with version)
@@ -91,7 +86,6 @@ e2e-install-mto: ## Install MTO via Helm
 		--namespace $(MTO_NAMESPACE) \
 		--create-namespace \
 		--version $(MTO_CHART_VERSION) \
-		$(if $(MTO_IMAGE_TAG),--set tenantController.manager.image.repository=$(MTO_IMAGE_REPO) --set tenantController.manager.image.tag=$(MTO_IMAGE_TAG),) \
 		--wait --timeout 5m
 	@echo "Waiting for MTO pods..."
 	kubectl wait --for=condition=Ready pods --all -n $(MTO_NAMESPACE) --timeout=180s
