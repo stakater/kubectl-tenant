@@ -413,8 +413,10 @@ where the current user appears as an owner, editor, or viewer.`,
 		},
 	}
 
-	cmd.Flags().StringVar(&operatorNamespace, "operator-namespace", "multi-tenant-operator", "Namespace where tenant-operator is deployed")
-	cmd.Flags().StringVar(&operatorService, "operator-service", "tenant-operator-api", "Name of the tenant-operator API service")
+	cmd.Flags().StringVar(&operatorNamespace, "operator-namespace", "multi-tenant-operator",
+		"Namespace where tenant-operator is deployed")
+	cmd.Flags().StringVar(&operatorService, "operator-service", "tenant-operator-api",
+		"Name of the tenant-operator API service")
 	cmd.Flags().StringVar(&operatorPort, "operator-port", "8080", "Port of the tenant-operator API service")
 
 	return cmd
@@ -463,7 +465,7 @@ func extractBearerToken(cfg *rest.Config) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("probing API server for token: %w", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if captured == "" {
 		return "", fmt.Errorf("could not extract bearer token from kubeconfig credentials")
@@ -515,7 +517,7 @@ func listUserTenants(
 	if err != nil {
 		return fmt.Errorf("failed to call tenant-operator API: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -534,14 +536,20 @@ func listUserTenants(
 	}
 
 	if len(result.Tenants) == 0 {
-		fmt.Fprintln(ioStreams.Out, "No tenants found for the current user.")
+		if _, err := fmt.Fprintln(ioStreams.Out, "No tenants found for the current user."); err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
 		return nil
 	}
 
 	w := tabwriter.NewWriter(ioStreams.Out, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tROLE")
+	if _, err := fmt.Fprintln(w, "NAME\tROLE"); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
 	for _, t := range result.Tenants {
-		fmt.Fprintf(w, "%s\t%s\n", t.Name, t.Role)
+		if _, err := fmt.Fprintf(w, "%s\t%s\n", t.Name, t.Role); err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
 	}
 	return w.Flush()
 }
