@@ -8,6 +8,9 @@ It provides tenant-scoped Kubernetes operations to simplify cluster multi-tenanc
 ### Example Usage
 
 ```bash
+# List tenants for the current user
+kubectl tenant list
+
 # List all tenant-scoped resources
 kubectl tenant get <resource> <tenant>
 
@@ -15,16 +18,21 @@ kubectl tenant get <resource> <tenant>
 kubectl tenant get <resource> <tenant> <resource-name>
 
 # Examples
-kubectl tenant get storageclasses my-tenant              # List all storage classes
-kubectl tenant get namespaces my-tenant my-namespace     # Get specific namespace
+kubectl tenant list                                          # List your tenants
+kubectl tenant get storageclasses my-tenant                  # List storage classes
+kubectl tenant get namespaces my-tenant                      # List namespaces
+kubectl tenant get ingressclasses my-tenant                  # List ingress classes
+kubectl tenant get priorityclasses my-tenant                 # List priority classes
+kubectl tenant get quotas my-tenant                          # List quotas
+kubectl tenant get namespaces my-tenant my-namespace         # Get specific namespace
 ```
 
 ---
 
 ## Features
 
-* Adds a `kubectl tenant` subcommand set.
-* Functions like `kubectl get <resource>` but **filters output for the specified tenant**.
+* `kubectl tenant list` — lists all tenants the current user belongs to (owner, editor, or viewer).
+* `kubectl tenant get <resource> <tenant>` — like `kubectl get` but **filtered for the specified tenant**.
 * Ensures tenants can only discover their own resources instead of all resources available in the cluster (limitation of native RBAC on `list`).
 * Supports both **listing all tenant resources** and **getting specific resources** with tenant access validation.
 
@@ -34,6 +42,9 @@ kubectl tenant get namespaces my-tenant my-namespace     # Get specific namespac
 |----------|----------------|
 | Storage Classes | `storageclasses` |
 | Namespaces | `namespaces` |
+| Ingress Classes | `ingressclasses` |
+| Priority Classes | `priorityclasses` |
+| Quotas | `quotas` |
 
 ---
 
@@ -102,6 +113,37 @@ Example output:
 ```bash
 NAME              STATUS   AGE
 my-tenant-prod    Active   5d
+```
+
+**Ingress Classes**
+
+```bash
+kubectl tenant get ingressclasses my-tenant
+```
+
+**Priority Classes**
+
+```bash
+kubectl tenant get priorityclasses my-tenant
+```
+
+**Quotas**
+
+```bash
+kubectl tenant get quotas my-tenant
+```
+
+**List Tenants**
+
+List all tenants the current user belongs to:
+```bash
+kubectl tenant list
+```
+Example output:
+```bash
+NAME        ROLE
+logistics   owner
+warehouse   viewer
 ```
 
 ---
@@ -188,7 +230,7 @@ The documentation is automatically generated and updated during releases, and ca
 
 ## Roadmap
 
-* Additional tenant-scoped resources (IngressClasses, etc.).
+* Additional tenant-scoped resources as needed.
 
 ---
 
