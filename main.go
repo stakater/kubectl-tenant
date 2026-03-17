@@ -29,6 +29,15 @@ const (
 	PluginName = "kubectl-tenant"
 )
 
+type tenantEntry struct {
+	Name string `json:"name"`
+	Role string `json:"role"`
+}
+
+type tenantListResponse struct {
+	Tenants []tenantEntry `json:"tenants"`
+}
+
 type getOptions struct {
 	resource               schema.GroupVersionResource
 	listKind               string
@@ -390,6 +399,7 @@ func newListCmd(configFlags *genericclioptions.ConfigFlags, ioStreams genericioo
 	var operatorNamespace string
 	var operatorService string
 	var operatorPort string
+	printFlags := get.NewGetPrintFlags()
 
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -401,6 +411,9 @@ where the current user appears as an owner, editor, or viewer.`,
 		Example: `  # List tenants for the current user
   kubectl tenant list
 
+  # List tenants as JSON
+  kubectl tenant list -o json
+
   # List tenants with custom operator namespace
   kubectl tenant list --operator-namespace my-namespace`,
 		Args: cobra.NoArgs,
@@ -409,10 +422,11 @@ where the current user appears as an owner, editor, or viewer.`,
 			if err != nil {
 				return err
 			}
-			return listUserTenants(cmd.Context(), cfg, operatorNamespace, operatorService, operatorPort, ioStreams)
+			return listUserTenants(cmd.Context(), cfg, operatorNamespace, operatorService, operatorPort, printFlags, ioStreams)
 		},
 	}
 
+	printFlags.AddFlags(cmd)
 	cmd.Flags().StringVar(&operatorNamespace, "operator-namespace", "multi-tenant-operator",
 		"Namespace where tenant-operator is deployed")
 	cmd.Flags().StringVar(&operatorService, "operator-service", "tenant-operator-api",
@@ -483,6 +497,7 @@ func listUserTenants(
 	ctx context.Context,
 	cfg *rest.Config,
 	namespace, service, port string,
+	printFlags *get.PrintFlags,
 	ioStreams genericiooptions.IOStreams,
 ) error {
 	token, err := extractBearerToken(cfg)
@@ -524,12 +539,7 @@ func listUserTenants(
 		return fmt.Errorf("tenant-operator API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	var result struct {
-		Tenants []struct {
-			Name string `json:"name"`
-			Role string `json:"role"`
-		} `json:"tenants"`
-	}
+	var result tenantListResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
@@ -542,6 +552,12 @@ func listUserTenants(
 		return nil
 	}
 
+	// If an output format is specified (-o json, -o yaml, etc.), use kubectl printers
+	if printFlags.OutputFormat != nil && *printFlags.OutputFormat != "" {
+		return printTenantList(result, printFlags, ioStreams)
+	}
+
+	// Default: human-readable table
 	w := tabwriter.NewWriter(ioStreams.Out, 0, 4, 2, ' ', 0)
 	if _, err := fmt.Fprintln(w, "NAME\tROLE"); err != nil {
 		return fmt.Errorf("failed to write output: %w", err)
@@ -552,6 +568,40 @@ func listUserTenants(
 		}
 	}
 	return w.Flush()
+}
+
+func printTenantList(
+	result tenantListResponse,
+	printFlags *get.PrintFlags,
+	ioStreams genericiooptions.IOStreams,
+) error {
+	items := make([]unstructured.Unstructured, 0, len(result.Tenants))
+	for _, t := range result.Tenants {
+		items = append(items, unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion": "tenantoperator.stakater.com/v1beta3",
+				"kind":       "Tenant",
+				"metadata": map[string]any{
+					"name": t.Name,
+				},
+				"role": t.Role,
+			},
+		})
+	}
+
+	list := &unstructured.UnstructuredList{
+		Object: map[string]any{
+			"apiVersion": "tenantoperator.stakater.com/v1beta3",
+			"kind":       "TenantList",
+		},
+		Items: items,
+	}
+
+	p, err := printFlags.ToPrinter()
+	if err != nil {
+		return err
+	}
+	return p.PrintObj(list, ioStreams.Out)
 }
 
 func printResourceList(
