@@ -1,12 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
@@ -23,6 +28,15 @@ import (
 const (
 	PluginName = "kubectl-tenant"
 )
+
+type tenantEntry struct {
+	Name string `json:"name"`
+	Role string `json:"role"`
+}
+
+type tenantListResponse struct {
+	Tenants []tenantEntry `json:"tenants"`
+}
 
 type getOptions struct {
 	resource               schema.GroupVersionResource
@@ -101,10 +115,12 @@ cluster-scoped resources based on tenant permissions.`,
 	}
 
 	getCmd := newGetCmd(flags, ioStreams)
+	listCmd := newListCmd(flags, ioStreams)
 	docsCmd := newDocsCmd(root)
 
 	flags.AddFlags(root.PersistentFlags())
 	root.AddCommand(getCmd)
+	root.AddCommand(listCmd)
 	root.AddCommand(docsCmd)
 	return root
 }
@@ -377,6 +393,215 @@ func extractNamespaceNames(u *unstructured.Unstructured) []string {
 
 	sort.Strings(out)
 	return out
+}
+
+func newListCmd(configFlags *genericclioptions.ConfigFlags, ioStreams genericiooptions.IOStreams) *cobra.Command {
+	var operatorNamespace string
+	var operatorService string
+	var operatorPort string
+	printFlags := get.NewGetPrintFlags()
+
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List tenants for the current user",
+		Long: `List all tenants that the current user has access to.
+
+This command calls the tenant-operator API to retrieve the list of tenants
+where the current user appears as an owner, editor, or viewer.`,
+		Example: `  # List tenants for the current user
+  kubectl tenant list
+
+  # List tenants as JSON
+  kubectl tenant list -o json
+
+  # List tenants with custom operator namespace
+  kubectl tenant list --operator-namespace my-namespace`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := configFlags.ToRESTConfig()
+			if err != nil {
+				return err
+			}
+			return listUserTenants(cmd.Context(), cfg, operatorNamespace, operatorService, operatorPort, printFlags, ioStreams)
+		},
+	}
+
+	printFlags.AddFlags(cmd)
+	cmd.Flags().StringVar(&operatorNamespace, "operator-namespace", "multi-tenant-operator",
+		"Namespace where tenant-operator is deployed")
+	cmd.Flags().StringVar(&operatorService, "operator-service", "tenant-operator-api",
+		"Name of the tenant-operator API service")
+	cmd.Flags().StringVar(&operatorPort, "operator-port", "8080", "Port of the tenant-operator API service")
+
+	return cmd
+}
+
+// extractBearerToken gets the bearer token from a REST config.
+// Supports static tokens, token files, and exec/OIDC-based credentials.
+func extractBearerToken(cfg *rest.Config) (string, error) {
+	if cfg.BearerToken != "" {
+		return cfg.BearerToken, nil
+	}
+
+	if cfg.BearerTokenFile != "" {
+		data, err := os.ReadFile(cfg.BearerTokenFile)
+		if err != nil {
+			return "", fmt.Errorf("reading bearer token file: %w", err)
+		}
+		token := strings.TrimSpace(string(data))
+		if token != "" {
+			return token, nil
+		}
+	}
+
+	// For exec/OIDC: make a lightweight API call and capture the token from the Authorization header.
+	transport, err := rest.TransportFor(cfg)
+	if err != nil {
+		return "", fmt.Errorf("creating transport: %w", err)
+	}
+
+	var captured string
+	capturingTransport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		if auth := req.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+			captured = strings.TrimPrefix(auth, "Bearer ")
+		}
+		return transport.RoundTrip(req)
+	})
+
+	url := strings.TrimRight(cfg.Host, "/") + "/version"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	client := &http.Client{Transport: capturingTransport}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("probing API server for token: %w", err)
+	}
+	_ = resp.Body.Close()
+
+	if captured == "" {
+		return "", fmt.Errorf("could not extract bearer token from kubeconfig credentials")
+	}
+	return captured, nil
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func listUserTenants(
+	ctx context.Context,
+	cfg *rest.Config,
+	namespace, service, port string,
+	printFlags *get.PrintFlags,
+	ioStreams genericiooptions.IOStreams,
+) error {
+	token, err := extractBearerToken(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to extract bearer token: %w", err)
+	}
+
+	proxyPath := fmt.Sprintf(
+		"/api/v1/namespaces/%s/services/%s:%s/proxy/api/v1/tenants",
+		namespace, service, port,
+	)
+
+	transport, err := rest.TransportFor(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to create transport: %w", err)
+	}
+
+	bodyBytes, err := json.Marshal(map[string]string{"token": token})
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
+	url := strings.TrimRight(cfg.Host, "/") + proxyPath
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Transport: transport}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to call tenant-operator API: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("tenant-operator API returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var result tenantListResponse
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if len(result.Tenants) == 0 {
+		if _, err := fmt.Fprintln(ioStreams.Out, "No tenants found for the current user."); err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		return nil
+	}
+
+	// If an output format is specified (-o json, -o yaml, etc.), use kubectl printers
+	if printFlags.OutputFormat != nil && *printFlags.OutputFormat != "" {
+		return printTenantList(result, printFlags, ioStreams)
+	}
+
+	// Default: human-readable table
+	w := tabwriter.NewWriter(ioStreams.Out, 0, 4, 2, ' ', 0)
+	if _, err := fmt.Fprintln(w, "NAME\tROLE"); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
+	for _, t := range result.Tenants {
+		if _, err := fmt.Fprintf(w, "%s\t%s\n", t.Name, t.Role); err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+	}
+	return w.Flush()
+}
+
+func printTenantList(
+	result tenantListResponse,
+	printFlags *get.PrintFlags,
+	ioStreams genericiooptions.IOStreams,
+) error {
+	items := make([]unstructured.Unstructured, 0, len(result.Tenants))
+	for _, t := range result.Tenants {
+		items = append(items, unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion": "tenantoperator.stakater.com/v1beta3",
+				"kind":       "Tenant",
+				"metadata": map[string]any{
+					"name": t.Name,
+				},
+				"role": t.Role,
+			},
+		})
+	}
+
+	list := &unstructured.UnstructuredList{
+		Object: map[string]any{
+			"apiVersion": "tenantoperator.stakater.com/v1beta3",
+			"kind":       "TenantList",
+		},
+		Items: items,
+	}
+
+	p, err := printFlags.ToPrinter()
+	if err != nil {
+		return err
+	}
+	return p.PrintObj(list, ioStreams.Out)
 }
 
 func printResourceList(
