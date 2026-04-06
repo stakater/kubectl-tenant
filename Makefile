@@ -7,7 +7,7 @@ GOLANGCI_LINT_VERSION ?= v1.64.8
 # E2E config
 K3D_CLUSTER_NAME ?= kubectl-tenant-e2e
 MTO_NAMESPACE ?= multi-tenant-operator
-MTO_CHART_VERSION ?= 1.5.2
+MTO_CHART_VERSION ?= 1.6.2
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary (ideally with version)
