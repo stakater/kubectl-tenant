@@ -397,6 +397,16 @@ func waitForTenantReady(t *testing.T, ctx context.Context) {
 	}
 }
 
+func getServiceAccountToken(t *testing.T) string {
+	t.Helper()
+	cmd := exec.Command("kubectl", "create", "token", "default", "-n", "default")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("failed to create SA token: %v", err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
 func cleanupTestResources(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
@@ -439,6 +449,8 @@ func TestE2E(t *testing.T) {
 
 	// Test the list subcommand
 	t.Run("list", func(t *testing.T) {
+		token := getServiceAccountToken(t)
+
 		tests := []struct {
 			name           string
 			args           []string
@@ -448,27 +460,27 @@ func TestE2E(t *testing.T) {
 		}{
 			{
 				name:           "lists tenants for current user",
-				args:           []string{"list"},
+				args:           []string{"list", "--token", token},
 				wantOutContain: testTenant,
 			},
 			{
 				name:           "output format: json",
-				args:           []string{"list", "-o", "json"},
+				args:           []string{"list", "--token", token, "-o", "json"},
 				wantOutContain: `"kind"`,
 			},
 			{
 				name:           "output format: yaml",
-				args:           []string{"list", "-o", "yaml"},
+				args:           []string{"list", "--token", token, "-o", "yaml"},
 				wantOutContain: "kind:",
 			},
 			{
 				name:    "error: invalid operator namespace",
-				args:    []string{"list", "--operator-namespace", "nonexistent-ns"},
+				args:    []string{"list", "--token", token, "--operator-namespace", "nonexistent-ns"},
 				wantErr: true,
 			},
 			{
 				name:    "error: invalid operator service",
-				args:    []string{"list", "--operator-service", "nonexistent-svc"},
+				args:    []string{"list", "--token", token, "--operator-service", "nonexistent-svc"},
 				wantErr: true,
 			},
 		}
