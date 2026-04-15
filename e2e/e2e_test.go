@@ -18,6 +18,7 @@ import (
 
 const testTenant = "e2e-tenant"
 const invalidTenant = "nonexistent-tenant"
+const testListSA = "system:serviceaccount:default:default"
 
 // resourceTestConfig holds test fixtures for each resource type
 type resourceTestConfig struct {
@@ -341,6 +342,11 @@ func createTenant(t *testing.T, ctx context.Context) {
 			"metadata":   map[string]interface{}{"name": testTenant},
 			"spec": map[string]interface{}{
 				"quota": q.allowed[0],
+				"accessControl": map[string]interface{}{
+					"owners": map[string]interface{}{
+						"users": []interface{}{testListSA},
+					},
+				},
 				"namespaces": map[string]interface{}{
 					"withTenantPrefix":        []interface{}{"dev", "prod"},
 					"onDeletePurgeNamespaces": true,
@@ -391,6 +397,16 @@ func waitForTenantReady(t *testing.T, ctx context.Context) {
 	}
 }
 
+func getServiceAccountToken(t *testing.T) string {
+	t.Helper()
+	cmd := exec.Command("kubectl", "create", "token", "default", "-n", "default")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("failed to create SA token: %v", err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
 func cleanupTestResources(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
@@ -430,4 +446,44 @@ func TestE2E(t *testing.T) {
 			runTestCases(t, tests)
 		})
 	}
+
+	// Test the list subcommand
+	t.Run("list", func(t *testing.T) {
+		token := getServiceAccountToken(t)
+
+		tests := []struct {
+			name           string
+			args           []string
+			wantErr        bool
+			wantErrContain string
+			wantOutContain string
+		}{
+			{
+				name:           "lists tenants for current user",
+				args:           []string{"list", "--token", token},
+				wantOutContain: testTenant,
+			},
+			{
+				name:           "output format: json",
+				args:           []string{"list", "--token", token, "-o", "json"},
+				wantOutContain: `"kind"`,
+			},
+			{
+				name:           "output format: yaml",
+				args:           []string{"list", "--token", token, "-o", "yaml"},
+				wantOutContain: "kind:",
+			},
+			{
+				name:    "error: invalid operator namespace",
+				args:    []string{"list", "--token", token, "--operator-namespace", "nonexistent-ns"},
+				wantErr: true,
+			},
+			{
+				name:    "error: invalid operator service",
+				args:    []string{"list", "--token", token, "--operator-service", "nonexistent-svc"},
+				wantErr: true,
+			},
+		}
+		runTestCases(t, tests)
+	})
 }
