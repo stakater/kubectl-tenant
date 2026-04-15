@@ -18,6 +18,7 @@ import (
 
 const testTenant = "e2e-tenant"
 const invalidTenant = "nonexistent-tenant"
+const testListSA = "system:serviceaccount:default:default"
 
 // resourceTestConfig holds test fixtures for each resource type
 type resourceTestConfig struct {
@@ -341,6 +342,11 @@ func createTenant(t *testing.T, ctx context.Context) {
 			"metadata":   map[string]interface{}{"name": testTenant},
 			"spec": map[string]interface{}{
 				"quota": q.allowed[0],
+				"accessControl": map[string]interface{}{
+					"owners": map[string]interface{}{
+						"users": []interface{}{testListSA},
+					},
+				},
 				"namespaces": map[string]interface{}{
 					"withTenantPrefix":        []interface{}{"dev", "prod"},
 					"onDeletePurgeNamespaces": true,
@@ -430,4 +436,42 @@ func TestE2E(t *testing.T) {
 			runTestCases(t, tests)
 		})
 	}
+
+	// Test the list subcommand
+	t.Run("list", func(t *testing.T) {
+		tests := []struct {
+			name           string
+			args           []string
+			wantErr        bool
+			wantErrContain string
+			wantOutContain string
+		}{
+			{
+				name:           "lists tenants for current user",
+				args:           []string{"list"},
+				wantOutContain: testTenant,
+			},
+			{
+				name:           "output format: json",
+				args:           []string{"list", "-o", "json"},
+				wantOutContain: `"kind"`,
+			},
+			{
+				name:           "output format: yaml",
+				args:           []string{"list", "-o", "yaml"},
+				wantOutContain: "kind:",
+			},
+			{
+				name:    "error: invalid operator namespace",
+				args:    []string{"list", "--operator-namespace", "nonexistent-ns"},
+				wantErr: true,
+			},
+			{
+				name:    "error: invalid operator service",
+				args:    []string{"list", "--operator-service", "nonexistent-svc"},
+				wantErr: true,
+			},
+		}
+		runTestCases(t, tests)
+	})
 }
