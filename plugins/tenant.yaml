@@ -5,10 +5,10 @@ metadata:
 spec:
   version: v0.0.3
   homepage: https://github.com/stakater/kubectl-tenant
-  shortDescription: Tenant-scoped operations for Stakater Multi Tenant Operator
+  shortDescription: Tenant-scoped operations for Stakater Multi-Tenant Operator
   description: |
     kubectl-tenant extends kubectl with the `tenant` command group for
-    interacting with Stakater Multi Tenant Operator (MTO).
+    interacting with Stakater Multi-Tenant Operator (MTO).
 
     It lets users list tenants they belong to and fetch tenant-scoped
     cluster resources (namespaces, storageclasses, ingressclasses,
@@ -16,7 +16,7 @@ spec:
     the limitation of Kubernetes RBAC on `list` for cluster-scoped
     resources.
   caveats: |
-    This plugin requires Stakater Multi Tenant Operator (MTO) to be
+    This plugin requires Stakater Multi-Tenant Operator (MTO) to be
     installed in the target cluster.
     See https://docs.stakater.com/mto for installation instructions.
   platforms:
