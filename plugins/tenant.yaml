@@ -14,7 +14,8 @@ spec:
     cluster resources (namespaces, storageclasses, ingressclasses,
     priorityclasses, quotas) with tenant access validation, overcoming
     the limitation of Kubernetes RBAC on `list` for cluster-scoped
-    resources.
+    resources without exposing resources to tenants that have no
+    access to them.
   caveats: |
     This plugin requires Stakater Multi-Tenant Operator (MTO) to be
     installed in the target cluster.

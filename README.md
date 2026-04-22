@@ -147,6 +147,38 @@ warehouse   viewer
 ```
 
 ---
+
+## Limitations
+
+### `kubectl tenant list` requires a bearer token
+
+The `list` subcommand calls the Multi-Tenant Operator API, which identifies
+the calling user from a **bearer token** in the request. The plugin extracts
+this token from your kubeconfig and supports:
+
+* Static tokens (`users[].user.token`)
+* Token files (`users[].user.tokenFile`)
+* `exec` / OIDC credential plugins (e.g. GKE, EKS, OpenShift)
+
+It **does not** work when the kubeconfig authenticates with **client
+certificates** (`users[].user.client-certificate` + `client-key`), because
+TLS client auth does not carry a bearer token. This affects dev clusters
+that default to cert-based admin auth, including **k3d**, **kind**, and
+vanilla `kubeadm` clusters.
+
+**Workaround:** use a ServiceAccount token instead. For example:
+
+```bash
+kubectl create serviceaccount my-user -n default
+kubectl create clusterrolebinding my-user --clusterrole=view --serviceaccount=default:my-user
+TOKEN=$(kubectl create token my-user -n default)
+kubectl tenant list --token="$TOKEN"
+```
+
+Note that the other subcommands (`kubectl tenant get …`) are unaffected —
+they work with any authentication method supported by `kubectl`.
+
+---
 ## Demo
 
 ![kubectl tenant rbac demo](./images/kubectlTenantRbacDemo.gif)
