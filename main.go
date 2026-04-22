@@ -21,6 +21,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/client-go/dynamic"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/cmd/get"
 )
@@ -110,9 +111,18 @@ func newRootCmd() *cobra.Command {
 		Short: "Tenant-related helpers for kubectl",
 		Long: `kubectl-tenant extends kubectl with tenant-scoped resource operations.
 
-It works with Stakater's Multi Tenant Operator to provide filtered views of 
+It works with Stakater's Multi Tenant Operator to provide filtered views of
 cluster-scoped resources based on tenant permissions.`,
 	}
+
+	prefix := ""
+	if strings.HasPrefix(filepath.Base(os.Args[0]), "kubectl-") {
+		prefix = "kubectl "
+	}
+	root.SetUsageTemplate(strings.NewReplacer(
+		"{{.UseLine}}", prefix+"{{.UseLine}}",
+		"{{.CommandPath}}", prefix+"{{.CommandPath}}",
+	).Replace(root.UsageTemplate()))
 
 	getCmd := newGetCmd(flags, ioStreams)
 	listCmd := newListCmd(flags, ioStreams)
